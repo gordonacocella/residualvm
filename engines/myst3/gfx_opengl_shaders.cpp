@@ -94,7 +94,7 @@ Math::Vector2d ShaderRenderer::scaled(float x, float y) const {
 }
 
 ShaderRenderer::ShaderRenderer(OSystem *system) :
-		BaseRenderer(system),
+		Renderer(system),
 		_prevText(""),
 		_prevTextPosition(0,0),
 		_currentViewport(Math::Vector2d(0.0, 0.0), Math::Vector2d(kOriginalWidth, kOriginalHeight)),
@@ -136,7 +136,6 @@ void ShaderRenderer::init() {
 
 	computeScreenViewport();
 
-	glEnable(GL_TEXTURE_2D);
 	glEnable(GL_DEPTH_TEST);
 
 	static const char* attributes[] = { "position", "texcoord", NULL };
@@ -178,7 +177,7 @@ void ShaderRenderer::setupCameraOrtho2D(bool noScaling) {
 }
 
 void ShaderRenderer::setupCameraPerspective(float pitch, float heading, float fov) {
-	BaseRenderer::setupCameraPerspective(pitch, heading, fov);
+	Renderer::setupCameraPerspective(pitch, heading, fov);
 
 	Common::Rect frame = frameViewport();
 	glViewport(frame.left, frame.top, frame.width(), frame.height());
@@ -194,7 +193,6 @@ void ShaderRenderer::drawRect2D(const Common::Rect &rect, uint32 color) {
 	_boxShader->setUniform("verOffsetXY", scaled(rect.left, rect.top));
 	_boxShader->setUniform("verSizeWH", scaled(rect.width(), rect.height()));
 
-	glDisable(GL_TEXTURE_2D);
 	glDepthMask(GL_FALSE);
 
 	if (a != 255) {
@@ -242,7 +240,6 @@ void ShaderRenderer::drawTexturedRect2D(const Common::Rect &screenRect, const Co
 	_boxShader->setUniform("texOffsetXY", Math::Vector2d(tLeft, tTop));
 	_boxShader->setUniform("texSizeWH", Math::Vector2d(tWidth, tHeight));
 
-	glEnable(GL_TEXTURE_2D);
 	glDepthMask(GL_FALSE);
 
 	glBindTexture(GL_TEXTURE_2D, glTexture->id);
@@ -263,7 +260,6 @@ void ShaderRenderer::draw2DText(const Common::String &text, const Common::Point 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	glEnable(GL_TEXTURE_2D);
 	glDisable(GL_DEPTH_TEST);
 	glDepthMask(GL_FALSE);
 
@@ -311,7 +307,6 @@ void ShaderRenderer::draw2DText(const Common::String &text, const Common::Point 
 	glDrawElements(GL_TRIANGLES, 6 * textToDraw.size(), GL_UNSIGNED_SHORT, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 	glDepthMask(GL_TRUE);
@@ -320,7 +315,6 @@ void ShaderRenderer::draw2DText(const Common::String &text, const Common::Point 
 void ShaderRenderer::drawCube(Texture **textures) {
 	OpenGLTexture *texture0 = static_cast<OpenGLTexture *>(textures[0]);
 
-	glEnable(GL_TEXTURE_2D);
 	glDepthMask(GL_FALSE);
 
 	_cubeShader->use();

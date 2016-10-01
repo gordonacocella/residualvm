@@ -23,7 +23,7 @@
 #include "engines/stark/visual/actor.h"
 
 #include "engines/stark/model/model.h"
-#include "engines/stark/model/skeleton.h"
+#include "engines/stark/model/animhandler.h"
 #include "engines/stark/gfx/driver.h"
 #include "engines/stark/gfx/texture.h"
 
@@ -31,9 +31,11 @@ namespace Stark {
 
 VisualActor::VisualActor() :
 		Visual(TYPE),
+		_animHandler(nullptr),
 		_model(nullptr),
+		_textureSet(nullptr),
 		_time(0),
-		_meshIsDirty(true) {
+		_modelIsDirty(true) {
 }
 
 VisualActor::~VisualActor() {
@@ -45,15 +47,19 @@ void VisualActor::setModel(Model *model) {
 	}
 
 	_model = model;
-	_meshIsDirty = true;
+	_modelIsDirty = true;
+}
+
+void VisualActor::setAnimHandler(AnimHandler *animHandler) {
+	_animHandler = animHandler;
 }
 
 void VisualActor::setAnim(SkeletonAnim *anim) {
-	_model->setAnim(anim);
+	_animHandler->setAnim(anim);
 }
 
 void VisualActor::setTexture(Gfx::TextureSet *texture) {
-	_model->setTextureSet(texture);
+	_textureSet = texture;
 }
 
 void VisualActor::setTime(uint32 time) {
@@ -85,6 +91,12 @@ bool VisualActor::intersectRay(const Math::Ray &ray, const Math::Vector3d positi
 	localRay.transform(inverseModelMatrix);
 
 	return _model->intersectRay(localRay);
+}
+
+void VisualActor::resetBlending() {
+	if (_animHandler) {
+		_animHandler->resetBlending();
+	}
 }
 
 } // End of namespace Stark

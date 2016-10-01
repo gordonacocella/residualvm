@@ -44,23 +44,9 @@ struct Event;
 namespace Myst3 {
 
 enum GameVersionFlags {
-	kFlagNone      = 0,
-	kFlagVersion10 = (1 << 0), // v1.0
-	kFlagDVD       = (1 << 1)  // DVD version
-};
-
-typedef uint32 SafeDiskKey[4];
-
-struct ExecutableVersion {
-	const char *description;
-	int flags;
-	const char *executable;
-	uint32 baseOffset;
-	uint32 ageTableOffset;
-	uint32 nodeInitScriptOffset;
-	uint32 soundNamesOffset;
-	uint32 ambientCuesOffset;
-	const SafeDiskKey *safeDiskKey;
+	kFlagNone        = 0,
+	kFlagDVD         = (1 << 1), // DVD version
+	kFlagMonolingual = (1 << 2)  // Monolingual version
 };
 
 // Engine Debug Flags
@@ -93,6 +79,7 @@ class Ambient;
 class ShakeEffect;
 class RotationEffect;
 class Transition;
+class FrameLimiter;
 struct NodeData;
 struct Myst3GameDescription;
 
@@ -105,6 +92,8 @@ protected:
 	virtual Common::Error run() override;
 	virtual void syncSoundSettings() override;
 	virtual GUI::Debugger *getDebugger() override { return (GUI::Debugger *)_console; }
+	virtual void pauseEngineIntern(bool pause) override;
+
 public:
 	GameState *_state;
 	Scene *_scene;
@@ -126,9 +115,10 @@ public:
 
 	bool hasFeature(EngineFeature f) const override;
 	Common::Platform getPlatform() const;
-	Common::Language getDefaultLanguage() const;
+	Common::Language getGameLanguage() const;
+	int16 getGameLanguageCode() const;
 	bool isMonolingual() const;
-	const ExecutableVersion *getExecutableVersion() const;
+	bool isDVDVersion() const;
 
 	bool canLoadGameStateCurrently() override;
 	Common::Error loadGameState(int slot) override;
@@ -136,6 +126,9 @@ public:
 
 	const DirectorySubEntry *getFileDescription(const Common::String &room, uint32 index, uint16 face,
 	                                            DirectorySubEntry::ResourceType type);
+	DirectorySubEntryList listFilesMatching(const Common::String &room, uint32 index, uint16 face,
+	                                        DirectorySubEntry::ResourceType type);
+
 	Graphics::Surface *loadTexture(uint16 id);
 	static Graphics::Surface *decodeJpeg(const DirectorySubEntry *jpegDesc);
 
@@ -176,7 +169,7 @@ public:
 
 	void setMenuAction(uint16 action) { _menuAction = action; }
 
-	void animateDirectionChange(float pitch, float heading, uint16 speed);
+	void animateDirectionChange(float pitch, float heading, uint16 scriptTicks);
 	void getMovieLookAt(uint16 id, bool start, float &pitch, float &heading);
 
 	void processInput(bool lookOnly);
@@ -213,11 +206,13 @@ private:
 	// Used by Voltaic's spinning gears
 	RotationEffect *_rotationEffect;
 
+	FrameLimiter *_frameLimiter;
 	Transition *_transition;
 
 	bool _inputSpacePressed;
 	bool _inputEnterPressed;
 	bool _inputEscapePressed;
+	bool _inputEscapePressedNotConsumed;
 	bool _inputTildePressed;
 
 	uint32 _backgroundSoundScriptLastRoomId;

@@ -21,6 +21,7 @@
  */
 
 #include "engines/myst3/puzzles.h"
+#include "engines/myst3/ambient.h"
 #include "engines/myst3/menu.h"
 #include "engines/myst3/myst3.h"
 #include "engines/myst3/state.h"
@@ -117,10 +118,10 @@ void Puzzles::run(uint16 id, uint16 arg0, uint16 arg1, uint16 arg2) {
 }
 
 void Puzzles::_drawForVarHelper(int16 var, int32 startValue, int32 endValue) {
-	uint startFrame = _vm->_state->getFrameCount();
-	uint currentFrame = startFrame;
+	uint startTick = _vm->_state->getTickCount();
+	uint currentTick = startTick;
 	uint numValues = abs(endValue - startValue);
-	uint endFrame = startFrame + 2 * numValues;
+	uint endTick = startTick + 2 * numValues;
 
 	int16 var2 = var;
 
@@ -129,10 +130,10 @@ void Puzzles::_drawForVarHelper(int16 var, int32 startValue, int32 endValue) {
 	if (var2 < 0)
 		var2 = -var2 + 1;
 
-	if (startFrame < endFrame) {
+	if (startTick < endTick) {
 		int currentValue = -9999;
 		while (1) {
-			int nextValue = (currentFrame - startFrame) / 2;
+			int nextValue = (currentTick - startTick) / 2;
 			if (currentValue != nextValue) {
 				currentValue = nextValue;
 
@@ -148,9 +149,9 @@ void Puzzles::_drawForVarHelper(int16 var, int32 startValue, int32 endValue) {
 
 			_vm->processInput(true);
 			_vm->drawFrame();
-			currentFrame = _vm->_state->getFrameCount();
+			currentTick = _vm->_state->getTickCount();
 
-			if (currentFrame > endFrame)
+			if (currentTick > endTick)
 				break;
 		}
 	}
@@ -159,10 +160,10 @@ void Puzzles::_drawForVarHelper(int16 var, int32 startValue, int32 endValue) {
 	_vm->_state->setVar(var2, endValue);
 }
 
-void Puzzles::_drawXFrames(uint16 frames) {
-	uint32 endFrame = _vm->_state->getFrameCount() + frames;
+void Puzzles::_drawXTicks(uint16 ticks) {
+	uint32 endTick = _vm->_state->getTickCount() + ticks;
 
-	while (_vm->_state->getFrameCount() < endFrame) {
+	while (_vm->_state->getTickCount() < endTick) {
 		_vm->processInput(true);
 		_vm->drawFrame();
 	}
@@ -470,7 +471,7 @@ void Puzzles::resonanceRingsLaunchBall() {
 					_vm->_state->setVar(38 + j, false);
 			}
 
-			// TODO: Run sound script (same as opcode 200, args 100, 2)
+			_vm->_ambient->playCurrentNode(100, 2);
 		}
 	} while (ballMoviePlaying || boardMoviePlaying);
 
@@ -502,7 +503,7 @@ void Puzzles::resonanceRingsLights() {
 		}
 	}
 
-	// TODO: Run sound script (same as opcode 200, args 100, 2)
+	_vm->_ambient->playCurrentNode(100, 2);
 }
 
 void Puzzles::pinball(int16 var) {
@@ -663,7 +664,7 @@ void Puzzles::pinball(int16 var) {
 	// Launch sound
 	_vm->_sound->playEffect(1021, 50);
 	_drawForVarHelper(-34, 2, 15);
-	_drawXFrames(30);
+	_drawXTicks(30);
 
 	int32 leftSideFrame = 250;
 	int32 rightSideFrame = 500;
@@ -682,19 +683,15 @@ void Puzzles::pinball(int16 var) {
 	int32 jumpType = -1;
 
 	while (1) {
-		_vm->drawFrame();
-		_vm->processInput(true);
-
-		// while (limit > renderCurrFrame);
-		// limit = _vm->_state->getFrameCount() + 1;
+		_drawXTicks(1);
 
 		bool shouldRotate;
 		if (leftToRightJumpCountDown >= 3 || rightToLeftJumpCountdown >= 3) {
 			shouldRotate = false;
-			// sound fade stop 1025, 7
+			_vm->_sound->stopEffect(1025, 7);
 		} else {
 			shouldRotate = true;
-			_vm->_sound->playEffect(1025, 50, ballOnLeftSide != 0 ? 150 : 210, 95);
+			_vm->_sound->playEffectLooping(1025, 50, ballOnLeftSide != 0 ? 150 : 210, 95);
 		}
 
 		if (ballOnLeftSide && shouldRotate) {
@@ -777,8 +774,8 @@ void Puzzles::pinball(int16 var) {
 		}
 
 		if (ballShouldJump) {
-			// sound fade stop 1025, 7
-			_drawXFrames(30);
+			_vm->_sound->stopEffect(1025, 7);
+			_drawXTicks(30);
 
 			int32 jumpPositionLeft = 50 * ((leftSideFrame + 25) / 50);
 			int32 jumpPositionRight = 50 * ((rightSideFrame + 25) / 50);
@@ -843,12 +840,12 @@ void Puzzles::pinball(int16 var) {
 				_drawForVarHelper(-34, jumpStartFrame, jump->endFrame);
 
 			if (jumpType == 3) {
-				_drawXFrames(6);
+				_drawXTicks(6);
 				_vm->_sound->playEffect(1028, 50);
 			} else if (jumpType == 1 || jumpType == 4) {
 				_vm->_state->setVar(26, jumpType);
 				_vm->_state->setWaterEffectRunning(true);
-				// sound fade stop 1025, 7
+				_vm->_sound->stopEffect(1025, 7);
 				return;
 			}
 
@@ -860,7 +857,7 @@ void Puzzles::pinball(int16 var) {
 			if (jumpType >= 2)
 				ballCrashed = 1;
 
-			_drawXFrames(30);
+			_drawXTicks(30);
 		}
 
 		if (ballShouldExpire) {
@@ -873,9 +870,9 @@ void Puzzles::pinball(int16 var) {
 			if (rightSideFrame == 500)
 				rightSideFrame = 200;
 
-			// sound fade stop 1025, 7
-			// Sound same as opcode 213 : 1005, 65, 0, 0, 5, 60, 20
-			_drawXFrames(55);
+			_vm->_sound->stopEffect(1025, 7);
+			_vm->_sound->playEffectFadeInOut(1005, 65, 0, 0, 5, 60, 20);
+			_drawXTicks(55);
 			_vm->_sound->playEffect(1010, 50);
 
 			for (uint i = 0; i < ARRAYSIZE(ballExpireFrames); i++) {
@@ -890,7 +887,7 @@ void Puzzles::pinball(int16 var) {
 				}
 			}
 
-			_drawXFrames(15);
+			_drawXTicks(15);
 			break;
 		}
 
@@ -898,7 +895,7 @@ void Puzzles::pinball(int16 var) {
 			break;
 	}
 
-	if (ballCrashed) {
+	if (ballCrashed || ballShouldExpire) {
 		if (leftSideFrame < 500)
 			leftSideFrame += 300;
 		if (rightSideFrame < 500)
@@ -963,19 +960,16 @@ void Puzzles::pinball(int16 var) {
 				}
 			}
 
-			_vm->drawFrame();
-			_vm->processInput(true);
-			// while (limit > renderCurrFrame);
-			// limit = _vm->_state->getFrameCount() + 1;
+			_drawXTicks(1);
 
 			if (!moviePlaying) {
 				_vm->_state->setVar(26, jumpType);
 				_vm->_state->setVar(93, 1);
-				// sound fade stop 1025, 7
+				_vm->_sound->stopEffect(1025, 7);
 				return;
 			}
 
-			// play sound same as opcode 212 : 1025, 50
+			_vm->_sound->playEffectLooping(1025, 50);
 		}
 	}
 }

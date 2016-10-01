@@ -80,19 +80,33 @@ void tglDisposeResources(TinyGL::GLContext *c) {
 	bool allDisposed = true;
 	do {
 		allDisposed = true;
-		TinyGL::GLTexture *t = c->shared_state.texture_hash_table[0];
-		while (t) {
-			if (t->disposed) {
-				TinyGL::free_texture(c, t->handle);
-				allDisposed = false;
-				break;
+		for (int i = 0; i < TEXTURE_HASH_TABLE_SIZE; i++) {
+			TinyGL::GLTexture *t = c->shared_state.texture_hash_table[i];
+			while (t) {
+				if (t->disposed) {
+					TinyGL::free_texture(c, t);
+					allDisposed = false;
+					break;
+				}
+				t = t->next;
 			}
-			t = t->next;
 		}
 
 	} while (allDisposed == false);
 
 	Graphics::Internal::tglCleanupImages();
+}
+
+void tglDisposeDrawCallLists(TinyGL::GLContext *c) {
+	typedef Common::List<Graphics::DrawCall *>::const_iterator DrawCallIterator;
+	for (DrawCallIterator it = c->_previousFrameDrawCallsQueue.begin(); it != c->_previousFrameDrawCallsQueue.end(); ++it) {
+		delete *it;
+	}
+	c->_previousFrameDrawCallsQueue.clear();
+	for (DrawCallIterator it = c->_drawCallsQueue.begin(); it != c->_drawCallsQueue.end(); ++it) {
+		delete *it;
+	}
+	c->_drawCallsQueue.clear();
 }
 
 void tglPresentBufferDirtyRects(TinyGL::GLContext *c) {
@@ -196,7 +210,7 @@ void tglPresentBufferDirtyRects(TinyGL::GLContext *c) {
 	// red rectangles are original dirty rects
 
 	bool blendingEnabled = c->fb->isBlendingEnabled();
-	bool alphaTestEnabled = c->fb->isAplhaTestEnabled();
+	bool alphaTestEnabled = c->fb->isAlphaTestEnabled();
 	c->fb->enableBlending(false);
 	c->fb->enableAlphaTest(false);
 
@@ -274,7 +288,9 @@ RasterizationDrawCall::RasterizationDrawCall() : DrawCall(DrawCall_Rasterization
 	_drawTriangleBack = c->draw_triangle_back;
 	memcpy(_vertex, c->vertex, sizeof(TinyGL::GLVertex) * _vertexCount);
 	_state = captureState();
-	computeDirtyRegion();
+	if (c->_enableDirtyRectangles) {
+		computeDirtyRegion();
+	}
 }
 
 void RasterizationDrawCall::computeDirtyRegion() {
@@ -283,9 +299,6 @@ void RasterizationDrawCall::computeDirtyRegion() {
 	int height = c->fb->ysize;
 
 	int left = width, right = 0, top = height, bottom = 0;
-
-	TinyGL::Vector4 minPc(FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX);
-	TinyGL::Vector4 maxPc(FLT_MIN, FLT_MIN, FLT_MIN, FLT_MIN);
 
 	bool pointInsideVolume = false;
 
@@ -393,14 +406,14 @@ void RasterizationDrawCall::execute(bool restoreState) const {
 		break;
 	case TGL_LINE_STRIP:
 	case TGL_LINE_LOOP:
-		for(int i = 0; i < cnt; i++) {
+		for(int i = 0; i < cnt - 1; i++) {
 			gl_draw_line(c, &c->vertex[i], &c->vertex[i + 1]);
 		}
-		gl_draw_line(c, &c->vertex[0], &c->vertex[cnt - 1]);
+		gl_draw_line(c, &c->vertex[cnt - 1], &c->vertex[0]);
 		break;
 	case TGL_TRIANGLES:
-		for(int i = 0; i < cnt / 3; i++) {
-			gl_draw_triangle(c, &c->vertex[i * 3], &c->vertex[i * 3 + 1], &c->vertex[i * 3 + 2]);
+		for(int i = 0; i < cnt; i += 3) {
+			gl_draw_triangle(c, &c->vertex[i], &c->vertex[i + 1], &c->vertex[i + 2]);
 		}
 		break;
 	case TGL_TRIANGLE_STRIP:
@@ -424,7 +437,7 @@ void RasterizationDrawCall::execute(bool restoreState) const {
 		}
 		break;
 	case TGL_QUADS:
-		for(int i = 0; i < cnt / 4; i++) {
+		for(int i = 0; i < cnt; i += 4) {
 			c->vertex[i + 2].edge_flag = 0;
 			gl_draw_triangle(c, &c->vertex[i], &c->vertex[i + 1], &c->vertex[i + 2]);
 			c->vertex[i + 2].edge_flag = 1;
@@ -550,8 +563,13 @@ bool RasterizationDrawCall::operator==(const RasterizationDrawCall &other) const
 }
 
 BlittingDrawCall::BlittingDrawCall(Graphics::BlitImage *image, const BlitTransform &transform, BlittingMode blittingMode) : DrawCall(DrawCall_Blitting), _transform(transform), _mode(blittingMode), _image(image) {
+	tglIncBlitImageRef(image);
 	_blitState = captureState();
 	_imageVersion = tglGetBlitImageVersion(image);
+}
+
+BlittingDrawCall::~BlittingDrawCall() {
+	tglDeleteBlitImage(_image);
 }
 
 void BlittingDrawCall::execute(bool restoreState) const {

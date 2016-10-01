@@ -88,6 +88,7 @@ struct GLLight {
 	Vector4 ambient;
 	Vector4 diffuse;
 	Vector4 specular;
+	bool has_specular;
 	Vector4 position;
 	Vector3 spot_direction;
 	float spot_exponent;
@@ -107,6 +108,7 @@ struct GLMaterial {
 	Vector4 ambient;
 	Vector4 diffuse;
 	Vector4 specular;
+	bool has_specular;
 	float shininess;
 
 	// computed values
@@ -181,7 +183,7 @@ struct GLImage {
 
 struct GLTexture {
 	GLImage images[MAX_TEXTURE_LEVELS];
-	int handle;
+	unsigned int handle;
 	int versionNumber;
 	struct GLTexture *next, *prev;
 	bool disposed;
@@ -417,6 +419,7 @@ void glInitTextures(GLContext *c);
 void glEndTextures(GLContext *c);
 GLTexture *alloc_texture(GLContext *c, int h);
 void free_texture(GLContext *c, int h);
+void free_texture(GLContext *c, GLTexture *t);
 
 // image_util.c
 void gl_resizeImage(unsigned char *dest, int xsize_dest, int ysize_dest,
@@ -425,6 +428,10 @@ void gl_resizeImageNoInterpolate(unsigned char *dest, int xsize_dest, int ysize_
 								 unsigned char *src, int xsize_src, int ysize_src);
 
 void tglIssueDrawCall(Graphics::DrawCall *drawCall);
+
+// zdirtyrect.cpp
+void tglDisposeResources(GLContext *c);
+void tglDisposeDrawCallLists(TinyGL::GLContext *c);
 
 GLContext *gl_get_context();
 

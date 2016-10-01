@@ -257,6 +257,7 @@ GfxOpenGLS::~GfxOpenGLS() {
 	delete _dimPlaneProgram;
 	delete _dimRegionProgram;
 	glDeleteTextures(1, &_storedDisplay);
+	glDeleteTextures(1, &_emergTexture);
 }
 
 void GfxOpenGLS::setupZBuffer() {
@@ -405,7 +406,6 @@ void GfxOpenGLS::setupShaders() {
 }
 
 byte *GfxOpenGLS::setupScreen(int screenW, int screenH, bool fullscreen) {
-	_pixelFormat = g_system->getScreenPixelBuffer().getFormat();
 	_screenWidth = screenW;
 	_screenHeight = screenH;
 	_scaleW = _screenWidth / (float)_gameWidth;
@@ -422,9 +422,6 @@ byte *GfxOpenGLS::setupScreen(int screenW, int screenH, bool fullscreen) {
 
 	setupZBuffer();
 	setupShaders();
-
-	// Load emergency built-in font
-	loadEmergFont();
 
 	glViewport(0, 0, _screenWidth, _screenHeight);
 
@@ -830,7 +827,6 @@ void GfxOpenGLS::drawShadowPlanes() {
 	glEnable(GL_STENCIL_TEST);
 	glStencilFunc(GL_ALWAYS, 1, (GLuint)~0);
 	glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
-	glDisable(GL_TEXTURE_2D);
 
 	if (!_currentShadowArray->userData) {
 		uint32 numVertices = 0;
@@ -913,6 +909,17 @@ void GfxOpenGLS::getShadowColor(byte *r, byte *g, byte *b) {
 	*b = _shadowColorB;
 }
 
+void GfxOpenGLS::destroyShadow(Shadow *shadow) {
+	ShadowUserData *sud = static_cast<ShadowUserData *>(shadow->userData);
+	if (sud) {
+		OpenGL::Shader::freeBuffer(sud->_verticesVBO);
+		OpenGL::Shader::freeBuffer(sud->_indicesVBO);
+		delete sud;
+	}
+
+	shadow->userData = nullptr;
+}
+
 void GfxOpenGLS::set3DMode() {
 
 }
@@ -977,12 +984,11 @@ void GfxOpenGLS::drawMesh(const Mesh *mesh) {
 
 	actorShader->use();
 	actorShader->setUniform("extraMatrix", _matrixStack.top());
+	actorShader->setUniform("lightsEnabled", _lightsEnabled && !isShadowModeActive());
 
 	const Material *curMaterial = NULL;
 	for (int i = 0; i < mesh->_numFaces;) {
 		const MeshFace *face = &mesh->_faces[i];
-		if (face->getLight() == 0 && !isShadowModeActive())
-			disableLights();
 
 		curMaterial = face->getMaterial();
 		curMaterial->select();
@@ -999,9 +1005,6 @@ void GfxOpenGLS::drawMesh(const Mesh *mesh) {
 		actorShader->setUniform("texScale", Math::Vector2d(_selectedTexture->_width, _selectedTexture->_height));
 
 		glDrawArrays(GL_TRIANGLES, *(int *)face->_userData, faces);
-
-		if (face->getLight() == 0 && !isShadowModeActive())
-			enableLights();
 	}
 }
 
@@ -1994,6 +1997,28 @@ void GfxOpenGLS::createEMIModel(EMIModel *model) {
 	}
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
+void GfxOpenGLS::destroyEMIModel(EMIModel *model) {
+	for (uint32 i = 0; i < model->_numFaces; ++i) {
+		EMIMeshFace *face = &model->_faces[i];
+		OpenGL::Shader::freeBuffer(face->_indicesEBO);
+		face->_indicesEBO = 0;
+	}
+
+	EMIModelUserData *mud = static_cast<EMIModelUserData *>(model->_userData);
+
+	if (mud) {
+		OpenGL::Shader::freeBuffer(mud->_verticesVBO);
+		OpenGL::Shader::freeBuffer(mud->_normalsVBO);
+		OpenGL::Shader::freeBuffer(mud->_texCoordsVBO);
+		OpenGL::Shader::freeBuffer(mud->_colorMapVBO);
+
+		delete mud->_shader;
+		delete mud;
+	}
+
+	model->_userData = nullptr;
 }
 
 void GfxOpenGLS::createMesh(Mesh *mesh) {

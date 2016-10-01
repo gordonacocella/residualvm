@@ -19,8 +19,8 @@ MODULE_OBJS := \
 	formats/xarc.o \
 	formats/xmg.o \
 	formats/xrc.o \
+	model/animhandler.o \
 	model/model.o \
-	model/skeleton.o \
 	model/skeleton_anim.o \
 	movement/followpath.o \
 	movement/movement.o \
@@ -74,6 +74,10 @@ MODULE_OBJS := \
 	services/staticprovider.o \
 	services/userinterface.o \
 	stark.o \
+	tools/abstractsyntaxtree.o \
+	tools/block.o \
+	tools/command.o \
+	tools/decompiler.o \
 	ui/actionmenu.o \
 	ui/button.o \
 	ui/clicktext.o \

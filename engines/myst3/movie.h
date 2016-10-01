@@ -41,8 +41,11 @@ public:
 	Movie(Myst3Engine *vm, uint16 id);
 	virtual ~Movie();
 
-	virtual void draw();
-	virtual void drawOverlay();
+	virtual void draw() override;
+	virtual void drawOverlay() override;
+
+	/** Increase or decrease the movie's pause level by one */
+	void pause(bool pause);
 
 	uint16 getId() { return _id; }
 	bool isVideoLoaded() {return _bink.isVideoLoaded(); }
@@ -94,8 +97,8 @@ public:
 	ScriptedMovie(Myst3Engine *vm, uint16 id);
 	virtual ~ScriptedMovie();
 
-	void draw();
-	void drawOverlay();
+	void draw() override;
+	void drawOverlay() override;
 	virtual void update();
 
 	void setEndFrameVar(uint16 v) { _endFrameVar = v; }
@@ -158,7 +161,7 @@ public:
 	void setSynchronized(bool b) { _synchronized = b; }
 private:
 	bool _synchronized;
-	uint _startEngineFrame;
+	uint _startEngineTick;
 };
 
 // Used by the projectors on J'nanin, see puzzle #14

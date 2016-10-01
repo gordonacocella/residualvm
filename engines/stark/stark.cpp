@@ -107,7 +107,7 @@ Common::Error StarkEngine::run() {
 	_stateProvider = new StateProvider();
 	_global = new Global();
 	_resourceProvider = new ResourceProvider(_archiveLoader, _stateProvider, _global);
-	_staticProvider = new StaticProvider(_archiveLoader, _global);
+	_staticProvider = new StaticProvider(_archiveLoader);
 	_randomSource = new Common::RandomSource("stark");
 	_fontProvider = new FontProvider();
 	_scene = new Scene(_gfx);
@@ -176,52 +176,50 @@ void StarkEngine::setStartupLocation() {
 
 void StarkEngine::mainLoop() {
 	while (!shouldQuit()) {
-		// Process events
-		Common::Event e;
-		while (g_system->getEventManager()->pollEvent(e)) {
-			// Handle any buttons, keys and joystick operations
-			if (e.type == Common::EVENT_KEYDOWN) {
-				if (e.kbd.ascii == 'q') {
-					quitGame();
-					break;
-				} else if (e.kbd.keycode == Common::KEYCODE_d) {
-					if (e.kbd.flags & Common::KBD_CTRL) {
-						_console->attach();
-						_console->onFrame();
-					}
-				} else if (e.kbd.keycode == Common::KEYCODE_ESCAPE) {
-					_gameInterface->skipCurrentSpeeches();
-					// Quick-hack for now.
-					_userInterface->skipFMV();
-				} else {
-					//handleChars(event.type, event.kbd.keycode, event.kbd.flags, event.kbd.ascii);
-				}
-
-			} else if (e.type == Common::EVENT_LBUTTONUP) {
-				// Do nothing for now
-			} else if (e.type == Common::EVENT_MOUSEMOVE) {
-				_userInterface->handleMouseMove(e.mouse);
-			} else if (e.type == Common::EVENT_LBUTTONDOWN) {
-				_userInterface->handleClick();
-				if (_system->getMillis() - _lastClickTime < _doubleClickDelay) {
-					_userInterface->handleDoubleClick();
-				}
-				_lastClickTime = _system->getMillis();
-			} else if (e.type == Common::EVENT_RBUTTONDOWN) {
-				_userInterface->handleRightClick();
-			}
-		}
-
 		if (_resourceProvider->hasLocationChangeRequest()) {
 			_resourceProvider->performLocationChange();
 		}
 
 		updateDisplayScene();
-		g_system->delayMillis(50);
+		g_system->delayMillis(10);
+
+		processEvents();
 
 		if (_userInterface->shouldExit()) {
 			quitGame();
 			break;
+		}
+	}
+}
+
+void StarkEngine::processEvents() {
+	Common::Event e;
+	while (g_system->getEventManager()->pollEvent(e)) {
+		// Handle any buttons, keys and joystick operations
+		if (e.type == Common::EVENT_KEYDOWN) {
+			if (e.kbd.keycode == Common::KEYCODE_d) {
+				if (e.kbd.flags & Common::KBD_CTRL) {
+					_console->attach();
+					_console->onFrame();
+				}
+			} else if (e.kbd.keycode == Common::KEYCODE_ESCAPE) {
+				_gameInterface->skipCurrentSpeeches();
+				// Quick-hack for now.
+				_userInterface->skipFMV();
+			}
+
+		} else if (e.type == Common::EVENT_LBUTTONUP) {
+			// Do nothing for now
+		} else if (e.type == Common::EVENT_MOUSEMOVE) {
+			_userInterface->handleMouseMove(e.mouse);
+		} else if (e.type == Common::EVENT_LBUTTONDOWN) {
+			_userInterface->handleClick();
+			if (_system->getMillis() - _lastClickTime < _doubleClickDelay) {
+				_userInterface->handleDoubleClick();
+			}
+			_lastClickTime = _system->getMillis();
+		} else if (e.type == Common::EVENT_RBUTTONDOWN) {
+			_userInterface->handleRightClick();
 		}
 	}
 }

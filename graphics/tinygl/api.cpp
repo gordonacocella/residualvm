@@ -90,19 +90,7 @@ void tglColor4f(float r, float g, float b, float a) {
 }
 
 void tglColor4fv(float *v) {
-	TinyGL::GLParam p[9];
-
-	p[0].op = TinyGL::OP_Color;
-	p[1].f = v[0];
-	p[2].f = v[1];
-	p[3].f = v[2];
-	p[4].f = v[3];
-	// direct convertion to integer to go faster if no shading
-	p[5].ui = (unsigned int)(v[0] * (ZB_POINT_RED_MAX - ZB_POINT_RED_MIN) + ZB_POINT_RED_MIN);
-	p[6].ui = (unsigned int)(v[1] * (ZB_POINT_GREEN_MAX - ZB_POINT_GREEN_MIN) + ZB_POINT_GREEN_MIN);
-	p[7].ui = (unsigned int)(v[2] * (ZB_POINT_BLUE_MAX - ZB_POINT_BLUE_MIN) + ZB_POINT_BLUE_MIN);
-	p[8].ui = (unsigned int)(v[3] * (ZB_POINT_ALPHA_MAX - ZB_POINT_ALPHA_MIN) + ZB_POINT_ALPHA_MIN);
-	TinyGL::gl_add_op(p);
+	tglColor4f(v[0], v[1], v[2], v[3]);
 }
 
 void tglColor3f(float x, float y, float z) {
@@ -111,6 +99,10 @@ void tglColor3f(float x, float y, float z) {
 
 void tglColor3fv(float *v)  {
 	tglColor4f(v[0], v[1], v[2], 1);
+}
+
+void tglColor3ub(unsigned char r, unsigned char g, unsigned char b) {
+	tglColor4f(r / 255.0f, g / 255.0f, b / 255.0f, 1.0f);
 }
 
 void tglColor4ub(unsigned char r, unsigned char g, unsigned char b, unsigned char a) {

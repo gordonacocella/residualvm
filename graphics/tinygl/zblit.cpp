@@ -41,7 +41,7 @@ Common::Rect rotateRectangle(int x, int y, int width, int height, int rotation, 
 
 struct BlitImage {
 public:
-	BlitImage() : _isDisposed(false), _version(0), _binaryTransparent(false) { }
+	BlitImage() : _isDisposed(false), _version(0), _binaryTransparent(false), _refcount(1) { }
 
 	void loadData(const Graphics::Surface &surface, uint32 colorKey, bool applyColorKey) {
 		const Graphics::PixelFormat textureFormat(4, 8, 8, 8, 8, 0, 8, 16, 24);
@@ -52,7 +52,7 @@ public:
 		if (applyColorKey) {
 			for (int x = 0;  x < surface.w; x++) {
 				for (int y = 0; y < surface.h; y++) {
-					uint32 pixel = dataBuffer.getValueAt(y * surface.w + x);
+					uint32 pixel = buffer.getValueAt(y * surface.w + x);
 					if (pixel == colorKey) {
 						// Color keyed pixels become transparent white.
 						dataBuffer.setPixelAt(y * surface.w + x, 0, 255, 255, 255); 
@@ -249,7 +249,8 @@ public:
 
 	int getWidth() const { return _surface.w; }
 	int getHeight() const { return _surface.h; }
-	void dispose() { _isDisposed = true; }
+	void incRefCount() { _refcount++; }
+	void dispose() { if (--_refcount == 0) _isDisposed = true; }
 	bool isDisposed() const { return _isDisposed; }
 private:
 	bool _isDisposed;
@@ -257,11 +258,16 @@ private:
 	Common::Array<Line> _lines;
 	Graphics::Surface _surface;
 	int _version;
+	int _refcount;
 };
 
 void tglGetBlitImageSize(BlitImage *blitImage, int &width, int &height) {
 	width = blitImage->getWidth();
 	height = blitImage->getHeight();
+}
+
+void tglIncBlitImageRef(BlitImage *blitImage) {
+	blitImage->incRefCount();
 }
 
 int tglGetBlitImageVersion(BlitImage *blitImage) {

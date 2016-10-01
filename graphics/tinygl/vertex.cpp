@@ -113,11 +113,11 @@ void glopBegin(GLContext *c, GLParam *p) {
 				c->matrix_model_projection_no_w_transform = 1;
 		}
 
-		// test if the texture matrix is not Identity
-		c->apply_texture_matrix = !c->matrix_stack_ptr[2]->isIdentity();
-
 		c->matrix_model_projection_updated = 0;
 	}
+	// test if the texture matrix is not Identity
+	c->apply_texture_matrix = !c->matrix_stack_ptr[2]->isIdentity();
+
 	// viewport
 	if (c->viewport.updated) {
 		gl_eval_viewport(c);
@@ -185,6 +185,8 @@ static inline void gl_vertex_transform(GLContext *c, GLVertex *v) {
 		if (c->matrix_model_projection_no_w_transform) {
 			v->pc.W = (m->_m[3][3]);
 		}
+		v->normal.X = v->normal.Y = v->normal.Z = 0;
+		v->ec.X = v->ec.Y = v->ec.Z = v->ec.W = 0;
 	}
 
 	v->clip_code = gl_clipcode(v->pc.X, v->pc.Y, v->pc.Z, v->pc.W);

@@ -1745,11 +1745,6 @@ bool Actor::updateTalk(uint frameTime) {
 }
 
 void Actor::draw() {
-	for (Common::List<Costume *>::iterator i = _costumeStack.begin(); i != _costumeStack.end(); ++i) {
-		Costume *c = *i;
-		c->setupTextures();
-	}
-
 	if (!g_driver->isHardwareAccelerated() && g_grim->getFlagRefreshShadowMask()) {
 		for (int l = 0; l < MAX_SHADOWS; l++) {
 			if (!_shadowArray[l].active)
@@ -1935,8 +1930,7 @@ void Actor::clearShadowPlane(int i) {
 	shadow->active = false;
 	shadow->dontNegate = false;
 
-	// TODO: Clean up the userData properly
-	shadow->userData = nullptr;
+	g_driver->destroyShadow(shadow);
 }
 
 void Actor::putInSet(const Common::String &set) {

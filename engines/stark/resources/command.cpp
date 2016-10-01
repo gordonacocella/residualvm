@@ -108,6 +108,8 @@ Command *Command::execute(uint32 callMode, Script *script) {
 		return opGameEnd();
 	case kInventoryOpen:
 		return opInventoryOpen(_arguments[1].intValue);
+	case kDoNothing:
+		return opDoNothing();
 	case kItem3DPlaceOn:
 		return opItem3DPlaceOn(_arguments[1].referenceValue, _arguments[2].referenceValue);
 	case kItem3DWalkTo:
@@ -416,6 +418,10 @@ Command *Command::opInventoryOpen(bool open) {
 	return nextCommand();
 }
 
+Command *Command::opDoNothing() {
+	return nextCommand();
+}
+
 Command *Command::opItem3DPlaceOn(const ResourceReference &itemRef, const ResourceReference &targetRef) {
 	FloorPositionedItem *item = itemRef.resolve<FloorPositionedItem>();
 
@@ -560,7 +566,6 @@ Command *Command::opPlayAnimation(Script *script, const ResourceReference &animR
 	if (suspend) {
 		float animDuration = anim->getDuration();
 		script->pause(animDuration);
-		item->setMovementSuspendedScript(script);
 		return this; // Stay on the same command while suspended
 	} else {
 		return nextCommand();
@@ -834,6 +839,12 @@ Command *Command::opLocationScrollSet(const ResourceReference &scrollRef) {
 Command *Command::opPlayFullMotionVideo(Script *script, const ResourceReference &movieRef, int32 unknown) {
 	FMV *movie =  movieRef.resolve<FMV>();
 	warning("(TODO: Implement) opPlayFullMotionVideo(%s) : %s - %d", movie->getName().c_str(), movieRef.describe().c_str(), unknown);
+
+	// Characters don't need to continue their previous action after the FMV ends
+	Current *current = StarkGlobal->getCurrent();
+	Location *location = current->getLocation();
+	location->resetAnimationBlending();
+
 	StarkUserInterface->requestFMVPlayback(movie->getFilename());
 
 	// Unconditional suspension
@@ -1170,25 +1181,8 @@ void Command::readData(Formats::XRCReadStream *stream) {
 	}
 }
 
-void Command::printData() {
-	for (uint i = 0; i < _arguments.size(); i++) {
-		switch (_arguments[i].type) {
-		case Argument::kTypeInteger1:
-		case Argument::kTypeInteger2:
-			debug("%d: %d", i, _arguments[i].intValue);
-			break;
-
-		case Argument::kTypeResourceReference: {
-			debug("%d: %s", i, _arguments[i].referenceValue.describe().c_str());
-		}
-			break;
-		case Argument::kTypeString:
-			debug("%d: %s", i, _arguments[i].stringValue.c_str());
-			break;
-		default:
-			error("Unknown argument type %d", _arguments[i].type);
-		}
-	}
+Common::Array<Command::Argument> Command::getArguments() const {
+	return _arguments;
 }
 
 } // End of namespace Resources

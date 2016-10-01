@@ -23,208 +23,70 @@
 #ifndef BACKENDS_GRAPHICS_SURFACESDL_GRAPHICS_H
 #define BACKENDS_GRAPHICS_SURFACESDL_GRAPHICS_H
 
-#ifdef USE_OPENGL
-#include "graphics/opengl/system_headers.h"
-#include "graphics/opengl/framebuffer.h"
-#include "graphics/opengl/texture.h"
-#include "graphics/opengl/surfacerenderer.h"
-#endif
-
-#undef ARRAYSIZE
-
-#include "backends/graphics/graphics.h"
-#include "backends/graphics/sdl/sdl-graphics.h"
-#include "graphics/pixelformat.h"
-#include "graphics/scaler.h"
-#include "common/array.h"
-#include "common/events.h"
-#include "common/system.h"
-#include "math/rect2d.h"
-
-#include "backends/events/sdl/sdl-events.h"
-
-#include "backends/platform/sdl/sdl-sys.h"
-
-#ifndef RELEASE_BUILD
-// Define this to allow for focus rectangle debugging
-#define USE_SDL_DEBUG_FOCUSRECT
-#endif
+#include "backends/graphics/sdl/resvm-sdl-graphics.h"
 
 /**
- * SDL graphics manager
+ * SDL Surface based graphics manager
+ *
+ * Used when rendering the launcher, or games with TinyGL
  */
-class SurfaceSdlGraphicsManager : public SdlGraphicsManager, public Common::EventObserver {
+class SurfaceSdlGraphicsManager : public ResVmSdlGraphicsManager {
 public:
-	SurfaceSdlGraphicsManager(SdlEventSource *sdlEventSource, SdlWindow *window);
+	SurfaceSdlGraphicsManager(SdlEventSource *sdlEventSource, SdlWindow *window, const Capabilities &capabilities);
 	virtual ~SurfaceSdlGraphicsManager();
 
-	virtual void activateManager();
-	virtual void deactivateManager();
+	// GraphicsManager API - Features
+	virtual bool hasFeature(OSystem::Feature f) override;
 
-	virtual bool hasFeature(OSystem::Feature f);
-	virtual void setFeatureState(OSystem::Feature f, bool enable);
-	virtual bool getFeatureState(OSystem::Feature f);
+	// GraphicsManager API - Graphics mode
+	virtual void setupScreen(uint gameWidth, uint gameHeight, bool fullscreen, bool accel3d) override;
+	virtual Graphics::PixelBuffer getScreenPixelBuffer() override;
+	virtual int16 getHeight() override;
+	virtual int16 getWidth() override;
 
-	virtual const OSystem::GraphicsMode *getSupportedGraphicsModes() const;
-	virtual int getDefaultGraphicsMode() const;
-	virtual bool setGraphicsMode(int mode);
-	virtual int getGraphicsMode() const;
-	virtual void resetGraphicsScale();
-#ifdef USE_RGB_COLOR
-	virtual Graphics::PixelFormat getScreenFormat() const { return _screenFormat; }
-	virtual Common::List<Graphics::PixelFormat> getSupportedFormats() const;
-#endif
-	virtual void initSize(uint w, uint h, const Graphics::PixelFormat *format = NULL);
-	virtual void launcherInitSize(uint w, uint h); // ResidualVM specific method
-	virtual void setupScreen(uint gameWidth, uint gameHeight, bool fullscreen, bool accel3d); // ResidualVM specific method
-	virtual Graphics::PixelBuffer getScreenPixelBuffer(); // ResidualVM specific method
-	virtual int getScreenChangeID() const { return _screenChangeCount; }
+	// GraphicsManager API - Draw methods
+	virtual void updateScreen() override;
 
-	virtual void beginGFXTransaction();
-	virtual OSystem::TransactionError endGFXTransaction();
-
-	virtual int16 getHeight();
-	virtual int16 getWidth();
-
-protected:
-	// PaletteManager API
-	virtual void setPalette(const byte *colors, uint start, uint num);
-	virtual void grabPalette(byte *colors, uint start, uint num);
-
-public:
-	virtual void copyRectToScreen(const void *buf, int pitch, int x, int y, int w, int h);
-	virtual Graphics::Surface *lockScreen();
-	virtual void unlockScreen();
-	virtual void fillScreen(uint32 col);
-	virtual void updateScreen();
-	virtual void setShakePos(int shakeOffset);
-	virtual void setFocusRectangle(const Common::Rect& rect);
-	virtual void clearFocusRectangle();
-
-	virtual void showOverlay();
-	virtual void hideOverlay();
-	virtual Graphics::PixelFormat getOverlayFormat() const { return _overlayFormat; }
-	virtual void clearOverlay();
-	virtual void grabOverlay(void *buf, int pitch);
-	virtual void copyRectToOverlay(const void *buf, int pitch, int x, int y, int w, int h);
-
-	//ResidualVM specific implementions:
-	virtual int16 getOverlayHeight() { return _overlayHeight; }
-	virtual int16 getOverlayWidth() { return _overlayWidth; }
-	void closeOverlay(); // ResidualVM specific method
+	// GraphicsManager API - Overlay
+	virtual void showOverlay() override;
+	virtual void hideOverlay() override;
+	virtual void clearOverlay() override;
+	virtual void grabOverlay(void *buf, int pitch) override;
+	virtual void copyRectToOverlay(const void *buf, int pitch, int x, int y, int w, int h) override;
 
 	/* Render the passed Surfaces besides the game texture.
 	 * This is used for widescreen support in the Grim engine.
 	 * Note: we must copy the Surfaces, as they are free()d after this call.
 	 */
-	virtual void setSideTextures(Graphics::Surface *left, Graphics::Surface *right);
+	virtual void suggestSideTextures(Graphics::Surface *left, Graphics::Surface *right) override;
 
-	virtual bool showMouse(bool visible);
-	virtual void warpMouse(int x, int y);
-	virtual void setMouseCursor(const void *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor, bool dontScale = false, const Graphics::PixelFormat *format = NULL);
-	virtual void setCursorPalette(const byte *colors, uint start, uint num);
-	virtual bool lockMouse(bool lock); // ResidualVM specific method
+	// GraphicsManager API - Mouse
+	virtual void warpMouse(int x, int y) override;
 
-#ifdef USE_OSD
-	virtual void displayMessageOnOSD(const char *msg);
-#endif
-
-	// Override from Common::EventObserver
-	bool notifyEvent(const Common::Event &event);
-
-	// SdlGraphicsManager interface
-	virtual void notifyVideoExpose();
-	virtual void transformMouseCoordinates(Common::Point &point);
-	virtual void notifyMousePos(Common::Point mouse);
+	// SdlGraphicsManager API
+	virtual void transformMouseCoordinates(Common::Point &point) override;
 
 protected:
-
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 	SDL_Renderer *_renderer;
 	SDL_Texture *_screenTexture;
 	void deinitializeRenderer();
+	SDL_Surface *SDL_SetVideoMode(int width, int height, int bpp, Uint32 flags);
 #endif
 
 	SDL_Surface *_screen;
 	SDL_Surface *_subScreen;
-#ifdef USE_RGB_COLOR
-	Graphics::PixelFormat _screenFormat;
-	Common::List<Graphics::PixelFormat> _supportedFormats;
-#endif
 
-#ifdef USE_OPENGL
-	bool _opengl;
-#endif
-	bool _lockAspectRatio;
-	bool _fullscreen;
-
-	// overlay
 	SDL_Surface *_overlayscreen;
-	bool _overlayVisible;
-	Graphics::PixelFormat _overlayFormat;
-	int _overlayWidth, _overlayHeight;
 	bool _overlayDirty;
 
-	uint _desktopW, _desktopH;
 	Math::Rect2d _gameRect;
-
-#ifdef USE_OPENGL
-	// Antialiasing
-	int _antialiasing;
-	void setAntialiasing(bool enable);
-
-	// Overlay
-	Common::Array<OpenGL::Texture *> _overlayTextures;
-
-	OpenGL::Texture *_sideTextures[2];
-
-	void initializeOpenGLContext() const;
-	void updateOverlayTextures();
-	void drawOverlayOpenGL();
-	void drawSideTexturesOpenGL();
-
-	OpenGL::FrameBuffer *_frameBuffer;
-
-	OpenGL::SurfaceRenderer *_surfaceRenderer;
-
-#endif
 
 	SDL_Surface *_sideSurfaces[2];
 
-	/** Force full redraw on next updateScreen */
-	bool _forceFull;
-
-	int _screenChangeCount;
-
 	void drawOverlay();
 	void drawSideTextures();
-
-	bool detectFramebufferSupport();
-
-	/**
-	 * Places where the game can be drawn
-	 */
-	enum GameRenderTarget {
-		kScreen,     /** The game is drawn directly on the screen */
-		kSubScreen,  /** The game is drawn to a surface, which is centered on the screen */
-		kFramebuffer /** The game is drawn to a framebuffer, which is scaled to fit the screen */
-	};
-
-	/** Select the best draw target according to the specified parameters */
-	GameRenderTarget selectGameRenderTarget(bool fullscreen, bool accel3d,
-	                                        bool engineSupportsArbitraryResolutions,
-	                                        bool framebufferSupported,
-	                                        bool lockAspectRatio);
-
-	/** Compute the size and position of the game rectangle in the screen */
-	Math::Rect2d computeGameRect(GameRenderTarget gameRenderTarget, uint gameWidth, uint gameHeight,
-	                             uint effectiveWidth, uint effectiveHeight);
-
-	/** Checks if the render target supports drawing at arbitrary resolutions */
-	bool canUsePreferredResolution(GameRenderTarget gameRenderTarget, bool engineSupportsArbitraryResolutions);
-
-	/** Obtain the user configured fullscreen resolution, or default to the desktop resolution */
-	Common::Rect getPreferredFullscreenResolution();
+	void closeOverlay();
 };
 
 #endif

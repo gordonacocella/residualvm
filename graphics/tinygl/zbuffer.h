@@ -63,8 +63,6 @@ static const int DRAW_SMOOTH = 2;
 static const int DRAW_SHADOW_MASK = 3;
 static const int DRAW_SHADOW = 4;
 
-extern uint8 PSZB;
-
 struct Buffer {
 	byte *pbuf;
 	unsigned int *zbuf;
@@ -188,39 +186,79 @@ struct FrameBuffer {
 
 	template <bool kEnableAlphaTest, bool kBlendingEnabled>
 	FORCEINLINE void writePixel(int pixel, int value) {
+		writePixel<kEnableAlphaTest, kBlendingEnabled, false>(pixel, value, 0);
+	}
+
+	template <bool kEnableAlphaTest, bool kBlendingEnabled, bool kDepthWrite>
+	FORCEINLINE void writePixel(int pixel, int value, unsigned int z) {
 		byte rSrc, gSrc, bSrc, aSrc;
 		this->pbuf.getFormat().colorToARGB(value, aSrc, rSrc, gSrc, bSrc);
 
 		if (kBlendingEnabled == false) {
 			this->pbuf.setPixelAt(pixel, value);
+			if (kDepthWrite) {
+				_zbuf[pixel] = z;
+			}
 		} else {
-			writePixel<kEnableAlphaTest, kBlendingEnabled>(pixel, aSrc, rSrc, gSrc, bSrc);
+			writePixel<kEnableAlphaTest, kBlendingEnabled, kDepthWrite>(pixel, aSrc, rSrc, gSrc, bSrc, z);
 		}
 	}
 
 	FORCEINLINE void writePixel(int pixel, int value) {
-		writePixel<true, true>(pixel, value);
+		if (_alphaTestEnabled) {
+			writePixel<true>(pixel, value);
+		} else {
+			writePixel<false>(pixel, value);
+		}
+	}
+
+	template <bool kEnableAlphaTest>
+	FORCEINLINE void writePixel(int pixel, int value) {
+		if (_blendingEnabled) {
+			writePixel<kEnableAlphaTest, true>(pixel, value);
+		} else {
+			writePixel<kEnableAlphaTest, false>(pixel, value);
+		}
 	}
 
 	FORCEINLINE void writePixel(int pixel, byte rSrc, byte gSrc, byte bSrc) {
 		writePixel(pixel, 255, rSrc, gSrc, bSrc);
 	}
 
-	FORCEINLINE bool scissorPixel(int pixel) {
-		int x = pixel % xsize;
-		int y = pixel / xsize;
+	FORCEINLINE bool scissorPixel(int x, int y) {
 		return x < _clipRectangle.left || x > _clipRectangle.right || y < _clipRectangle.top || y > _clipRectangle.bottom;
 	}
 
 	FORCEINLINE void writePixel(int pixel, byte aSrc, byte rSrc, byte gSrc, byte bSrc) {
-		writePixel<true, true>(pixel, aSrc, rSrc, gSrc, bSrc);
+		if (_alphaTestEnabled) {
+			writePixel<true>(pixel, aSrc, rSrc, gSrc, bSrc);
+		} else {
+			writePixel<false>(pixel, aSrc, rSrc, gSrc, bSrc);
+		}
+	}
+
+	template <bool kEnableAlphaTest>
+	FORCEINLINE void writePixel(int pixel, byte aSrc, byte rSrc, byte gSrc, byte bSrc) {
+		if (_blendingEnabled) {
+			writePixel<kEnableAlphaTest, true>(pixel, aSrc, rSrc, gSrc, bSrc);
+		} else {
+			writePixel<kEnableAlphaTest, false>(pixel, aSrc, rSrc, gSrc, bSrc);
+		}
 	}
 
 	template <bool kEnableAlphaTest, bool kBlendingEnabled>
 	FORCEINLINE void writePixel(int pixel, byte aSrc, byte rSrc, byte gSrc, byte bSrc) {
+		writePixel<kEnableAlphaTest, kBlendingEnabled, false>(pixel, aSrc, rSrc, gSrc, bSrc, 0);
+	}
+
+	template <bool kEnableAlphaTest, bool kBlendingEnabled, bool kDepthWrite>
+	FORCEINLINE void writePixel(int pixel, byte aSrc, byte rSrc, byte gSrc, byte bSrc, unsigned int z) {
 		if (kEnableAlphaTest) {
 			if (!checkAlphaTest(aSrc))
 				return;
+		}
+		if (kDepthWrite) {
+			_zbuf[pixel] = z;
 		}
 		
 		if (kBlendingEnabled == false) {
@@ -377,10 +415,7 @@ struct FrameBuffer {
 	void clearOffscreenBuffer(Buffer *buffer);
 	void setTexture(const Graphics::PixelBuffer &texture);
 
-	template <bool kInterpRGB, bool kInterpZ, bool kInterpST, bool kInterpSTZ, int kDrawLogic, bool kDepthWrite, bool enableAlphaTest, bool kEnableScissor, bool kBlendingEnabled, bool kRGB565Target>
-	void fillTriangle(ZBufferPoint *p0, ZBufferPoint *p1, ZBufferPoint *p2);
-
-	template <bool kInterpRGB, bool kInterpZ, bool kInterpST, bool kInterpSTZ, int kDrawLogic, bool kDepthWrite, bool enableAlphaTest, bool kEnableScissor, bool kBlendingEnabled>
+	template <bool kInterpRGB, bool kInterpZ, bool kInterpST, bool kInterpSTZ, int kDrawLogic, bool kDepthWrite, bool enableAlphaTest, bool kEnableScissor, bool enableBlending>
 	void fillTriangle(ZBufferPoint *p0, ZBufferPoint *p1, ZBufferPoint *p2);
 
 	template <bool kInterpRGB, bool kInterpZ, bool kInterpST, bool kInterpSTZ, int kDrawMode, bool kDepthWrite, bool enableAlphaTest, bool kEnableScissor>
@@ -395,9 +430,6 @@ struct FrameBuffer {
 	template <bool kInterpRGB, bool kInterpZ, bool kInterpST, bool kInterpSTZ, int kDrawMode>
 	void fillTriangle(ZBufferPoint *p0, ZBufferPoint *p1, ZBufferPoint *p2);
 
-	template <bool kInterpRGB, bool kInterpZ, bool kDepthWrite>
-	void fillLineGeneric(ZBufferPoint *p1, ZBufferPoint *p2, int color);
-
 	void fillTriangleTextureMappingPerspectiveSmooth(ZBufferPoint *p0, ZBufferPoint *p1, ZBufferPoint *p2);
 	void fillTriangleTextureMappingPerspectiveFlat(ZBufferPoint *p0, ZBufferPoint *p1, ZBufferPoint *p2);
 	void fillTriangleDepthOnly(ZBufferPoint *p0, ZBufferPoint *p1, ZBufferPoint *p2);
@@ -409,9 +441,9 @@ struct FrameBuffer {
 	void plot(ZBufferPoint *p);
 	void fillLine(ZBufferPoint *p1, ZBufferPoint *p2);
 	void fillLineZ(ZBufferPoint *p1, ZBufferPoint *p2);
-	void fillLineFlatZ(ZBufferPoint *p1, ZBufferPoint *p2, int color);
+	void fillLineFlatZ(ZBufferPoint *p1, ZBufferPoint *p2);
 	void fillLineInterpZ(ZBufferPoint *p1, ZBufferPoint *p2);
-	void fillLineFlat(ZBufferPoint *p1, ZBufferPoint *p2, int color);
+	void fillLineFlat(ZBufferPoint *p1, ZBufferPoint *p2);
 	void fillLineInterp(ZBufferPoint *p1, ZBufferPoint *p2);
 
 	void setScissorRectangle(int left, int right, int top, int bottom) {
@@ -419,9 +451,11 @@ struct FrameBuffer {
 		_clipRectangle.right = right;
 		_clipRectangle.top = top;
 		_clipRectangle.bottom = bottom;
+		_enableScissor = left != 0 || right != xsize || top != 0 || bottom != ysize;
 	}
 
 	Common::Rect _clipRectangle;
+	bool _enableScissor;
 	int xsize, ysize;
 	int linesize; // line size, in bytes
 	Graphics::PixelFormat cmode;
@@ -453,6 +487,21 @@ struct FrameBuffer {
 	FORCEINLINE int getDepthTestEnabled() const { return _depthTestEnabled; }
 
 private:
+
+	template <bool kDepthWrite>
+	FORCEINLINE void putPixel(unsigned int pixelOffset, int color, int x, int y, unsigned int z);
+
+	template <bool kDepthWrite, bool kEnableScissor>
+	FORCEINLINE void putPixel(unsigned int pixelOffset, int color, int x, int y, unsigned int z);
+
+	template <bool kEnableScissor>
+	FORCEINLINE void putPixel(unsigned int pixelOffset, int color, int x, int y);
+
+	template <bool kInterpRGB, bool kInterpZ, bool kDepthWrite>
+	void drawLine(const ZBufferPoint *p1, const ZBufferPoint *p2);
+
+	template <bool kInterpRGB, bool kInterpZ, bool kDepthWrite, bool kEnableScissor>
+	void drawLine(const ZBufferPoint *p1, const ZBufferPoint *p2);
 
 	unsigned int *_zbuf;
 	bool _depthWrite;

@@ -31,7 +31,7 @@ namespace Myst3 {
 GameState::StateData::StateData() {
 	version = GameState::kSaveVersion;
 	gameRunning = true;
-	currentFrame = 0;
+	tickCount = 0;
 	nextSecondsUpdate = 0;
 	secondsPlayed = 0;
 	dword_4C2C44 = 0;
@@ -105,7 +105,7 @@ GameState::GameState(Myst3Engine *vm):
 	VAR(69, MenuSavedNode, false)
 
 	VAR(70, SecondsCountdown, false)
-	VAR(71, FrameCountdown, false)
+	VAR(71, TickCountdown, false)
 
 	// Counters, unused by the game scripts
 	VAR(76, CounterUnk76, false)
@@ -148,7 +148,7 @@ GameState::GameState(Myst3Engine *vm):
 	VAR(111, MagnetEffectUnk3, false)
 
 	VAR(112, ShakeEffectAmpl, false)
-	VAR(113, ShakeEffectFramePeriod, false)
+	VAR(113, ShakeEffectTickPeriod, false)
 	VAR(114, RotationEffectSpeed, false)
 	VAR(115, SunspotIntensity, false)
 	VAR(116, SunspotColor, false)
@@ -267,7 +267,7 @@ GameState::GameState(Myst3Engine *vm):
 
 	// Amateria ambient sound / movie counters (XXXX 1001 and XXXX 1002)
 	VAR(406, AmateriaSecondsCounter, false)
-	VAR(407, AmateriaFramesCounter, false)
+	VAR(407, AmateriaTicksCounter, false)
 
 	VAR(444, ResonanceRingsSolved, false)
 
@@ -407,7 +407,7 @@ void GameState::StateData::syncWithSaveGame(Common::Serializer &s) {
 		error("This savegame (v%d) is too recent (max %d) please get a newer version of ResidualVM", s.getVersion(), kSaveVersion);
 
 	s.syncAsUint32LE(gameRunning);
-	s.syncAsUint32LE(currentFrame);
+	s.syncAsUint32LE(tickCount);
 	s.syncAsUint32LE(nextSecondsUpdate);
 	s.syncAsUint32LE(secondsPlayed);
 	s.syncAsUint32LE(dword_4C2C44);
@@ -498,6 +498,7 @@ void GameState::StateData::resizeThumbnail(Graphics::Surface *small) const {
 
 void GameState::newGame() {
 	_data = StateData();
+	_lastTickStartTime = g_system->getMillis();
 }
 
 bool GameState::load(const Common::String &file) {
@@ -705,19 +706,18 @@ void GameState::limitCubeCamera(float minPitch, float maxPitch, float minHeading
 }
 
 void GameState::updateFrameCounters() {
-	_data.currentFrame++;
-
 	if (!_data.gameRunning)
 		return;
 
-	int32 frameCountdown = getFrameCountdown();
-	if (frameCountdown > 0)
-		setFrameCountdown(--frameCountdown);
-
-	if (getAmateriaFramesCounter() > 0)
-		setAmateriaFramesCounter(getAmateriaFramesCounter() - 1);
-
 	uint32 currentTime = g_system->getMillis();
+	int32 timeToNextTick = _lastTickStartTime + kTickDuration - currentTime;
+
+	if (timeToNextTick <= 0) {
+		_data.tickCount++;
+		updateTickCounters();
+		_lastTickStartTime = currentTime + timeToNextTick;
+	}
+
 	if (currentTime > _data.nextSecondsUpdate || ABS<int32>(_data.nextSecondsUpdate - currentTime) > 2000) {
 		_data.secondsPlayed++;
 		_data.nextSecondsUpdate = currentTime + 1000;
@@ -735,23 +735,42 @@ void GameState::updateFrameCounters() {
 		if (hasVarMenuAttractCountDown() && getMenuAttractCountDown() > 0)
 			setMenuAttractCountDown(getMenuAttractCountDown() - 1);
 	}
+}
+
+void GameState::updateTickCounters() {
+	int32 tickCountdown = getTickCountdown();
+	if (tickCountdown > 0)
+			setTickCountdown(--tickCountdown);
+
+	if (getAmateriaTicksCounter() > 0)
+			setAmateriaTicksCounter(getAmateriaTicksCounter() - 1);
 
 	if (getSweepEnabled()) {
-		if (getSweepValue() + getSweepStep() > getSweepMax()) {
-			setSweepValue(getSweepMax());
+			if (getSweepValue() + getSweepStep() > getSweepMax()) {
+				setSweepValue(getSweepMax());
 
-			if (getSweepStep() > 0) {
-				setSweepStep(-getSweepStep());
-			}
-		} else if (getSweepValue() + getSweepStep() < getSweepMin()) {
-			setSweepValue(getSweepMin());
+				if (getSweepStep() > 0) {
+					setSweepStep(-getSweepStep());
+				}
+			} else if (getSweepValue() + getSweepStep() < getSweepMin()) {
+				setSweepValue(getSweepMin());
 
-			if (getSweepStep() < 0) {
-				setSweepStep(-getSweepStep());
+				if (getSweepStep() < 0) {
+					setSweepStep(-getSweepStep());
+				}
+			} else {
+				setSweepValue(getSweepValue() + getSweepStep());
 			}
-		} else {
-			setSweepValue(getSweepValue() + getSweepStep());
 		}
+}
+
+uint GameState::getTickCount() const {
+	return _data.tickCount;
+}
+
+void GameState::pauseEngine(bool pause) {
+	if (!pause) {
+		_lastTickStartTime = g_system->getMillis();
 	}
 }
 

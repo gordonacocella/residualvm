@@ -55,3 +55,8 @@
 #endif
 
 #endif
+
+#if !defined(GL_MAX_SAMPLES)
+// The Android SDK and SDL1 don't declare GL_MAX_SAMPLES
+#define GL_MAX_SAMPLES 0x8D57
+#endif

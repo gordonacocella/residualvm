@@ -161,7 +161,6 @@ _build_hq_scalers=no
 _enable_prof=no
 _global_constructors=no
 _bink=yes
-_safedisc=no
 # Default vkeybd/keymapper/eventrec options
 _vkeybd=no
 _keymapper=no
@@ -906,7 +905,6 @@ Optional Features:
   --enable-verbose-build   enable regular echoing of commands during build
                            process
   --disable-bink           don't build with Bink video support
-  --enable-safedisc        enable SafeDisc decryption for Myst III
 
 Optional Libraries:
   --with-alsa-prefix=DIR   Prefix where alsa is installed (optional)
@@ -935,6 +933,9 @@ Optional Libraries:
   --disable-opengl         disable OpenGL (ES) support [autodetect]
   --disable-opengl-shaders disable use of modern OpenGL with shaders
   --force-opengles2        only detect OpenGL ES2
+
+  --with-glew-prefix=DIR   Prefix where GLEW is installed (optional)
+  --disable-glew           disable GLEW support [autodetect]
 
   --with-jpeg-prefix=DIR   Prefix where libjpeg is installed (optional)
   --disable-jpeg           disable JPEG decoder [autodetect]
@@ -1053,8 +1054,6 @@ for ac_option in $@; do
 	--force-opengles2)        _opengles2=yes  ;; #ResidualVM specific option
 	--enable-bink)            _bink=yes       ;;
 	--disable-bink)           _bink=no        ;;
-	--enable-safedisc)        _safedisc=yes   ;; #ResidualVM specific option
-	--disable-safedisc)       _safedisc=no    ;; #ResidualVM specific option
 	--enable-verbose-build)   _verbose_build=yes ;;
 	--enable-plugins)         _dynamic_modules=yes ;;
 	--default-dynamic)        _plugins_default=dynamic ;;
@@ -1159,6 +1158,11 @@ for ac_option in $@; do
 		arg=`echo $ac_option | cut -d '=' -f 2`
 		OPENGL_CFLAGS="-I$arg/include"
 		OPENGL_LIBS="-L$arg/lib"
+		;;
+	--with-glew-prefix=*) #ResidualVM specific option
+		arg=`echo $ac_option | cut -d '=' -f 2`
+		GLEW_CFLAGS="-I$arg/include"
+		GLEW_LIBS="-L$arg/lib"
 		;;
 	--with-iconv-prefix=*)
 		arg=`echo $ac_option | cut -d '=' -f 2`
@@ -4092,14 +4096,29 @@ define_in_config_if_yes "$_freetype2" "USE_FREETYPE2"
 #
 # Check for GLEW
 #
-if test "$_glew" != "no"; then
-	if test "$_opengl" = "no"; then
-		echo "Cannot use GLEW without OpenGL."
+echocheck "GL Extension Wrangler (GLEW)"
+if test "$_glew" != "no" && test "$_opengl" = "no"; then
+	_glew=no
+	echo "cannot use GLEW without OpenGL"
+elif test "$_glew" != "no" && test "$_opengles2" = "yes"; then
+	_glew=no
+	echo "not needed with OpenGL ES v2"
+else
+
+	case $_host_os in
+	darwin*)
+		_GLEW_LIBS="-lGLEW"
+		;;
+	mingw*)
+		_GLEW_LIBS="-lglu32 -lglew32"
+		;;
+	*)
+		_GLEW_LIBS="-lGLU -lGLEW"
+		;;
+	esac
+
+	if test "$_glew" = auto; then
 		_glew=no
-	else
-		_glew=no
-		GLEW_LIBS=`pkg-config --libs glew 2>> $TMPLOG`
-		GLEW_INCLUDES=`pkg-config --cflags glew 2>> $TMPLOG`
 		cat > $TMPC << EOF
 #include <GL/glew.h>
 int main(void) {
@@ -4107,16 +4126,17 @@ int main(void) {
 	return 0;
 }
 EOF
-		if cc_check $DEFINES $GLEW_LIBS $GLEW_INCLUDES
-		then
-			_glew=yes
-			append_var LIBS "$GLEW_LIBS"
-			append_var INCLUDES "$GLEW_INCLUDES"
-		fi
+		cc_check $DEFINES $GLEW_CFLAGS $GLEW_LIBS $_GLEW_LIBS && _glew=yes
 	fi
+
+	if test "$_glew" = yes ; then
+		append_var LIBS "$GLEW_LIBS $_GLEW_LIBS"
+		append_var INCLUDES "$GLEW_CFLAGS"
+	fi
+
+	echo "$_glew"
 fi
-echocheck "GL Extension Wrangler (GLEW)"
-echo "$_glew"
+
 define_in_config_if_yes "$_glew" "USE_GLEW"
 # ResidualVM specific end <-
 
@@ -4488,14 +4508,6 @@ define_in_config_if_yes $_taskbar 'USE_TASKBAR'
 echo_n "Building Bink video support... "
 define_in_config_if_yes $_bink 'USE_BINK'
 echo "$_bink"
-
-#
-# ResidualVM specific:
-# Check whether to build Safedisc decryption support
-#
-echo_n "Building SafeDisc decryption support... "
-define_in_config_if_yes $_safedisc 'USE_SAFEDISC'
-echo "$_safedisc"
 
 #
 # Check whether to build updates support

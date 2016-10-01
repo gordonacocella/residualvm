@@ -33,7 +33,8 @@ namespace Myst3 {
 Transition::Transition(Myst3Engine *vm) :
 		_vm(vm),
 		_type(kTransitionNone),
-		_sourceScreenshot(nullptr) {
+		_sourceScreenshot(nullptr),
+		_frameLimiter(new FrameLimiter(g_system, 60)) {
 
 	int transitionSpeed = ConfMan.getInt("transition_speed");
 
@@ -48,15 +49,17 @@ Transition::~Transition() {
 		_sourceScreenshot->free();
 		delete _sourceScreenshot;
 	}
+
+	delete _frameLimiter;
 }
 
 int Transition::computeDuration() {
-	int durationFrames = 30 * (100 - ConfMan.getInt("transition_speed")) / 100;
+	int durationTicks = 30 * (100 - ConfMan.getInt("transition_speed")) / 100;
 	if (_type == kTransitionZip) {
-		durationFrames >>= 1;
+		durationTicks >>= 1;
 	}
 
-	return durationFrames;
+	return durationTicks;
 }
 
 void Transition::playSound() {
@@ -73,10 +76,10 @@ void Transition::draw(TransitionType type) {
 	// Play the transition sound
 	playSound();
 
-	int durationFrames = computeDuration();
+	int durationTicks = computeDuration();
 
 	// Got any transition to draw?
-	if (!_sourceScreenshot || type == kTransitionNone || durationFrames == 0) {
+	if (!_sourceScreenshot || type == kTransitionNone || durationTicks == 0) {
 		return;
 	}
 
@@ -91,19 +94,21 @@ void Transition::draw(TransitionType type) {
 	delete target;
 
 	// Compute the start and end frames for the animation
-	int startFrame = _vm->_state->getFrameCount();
-	uint endFrame = startFrame + durationFrames;
+	int startTick = _vm->_state->getTickCount();
+	uint endTick = startTick + durationTicks;
 
 	// Draw each step until completion
 	int completion = 0;
-	while (_vm->_state->getFrameCount() <= endFrame || completion < 100) {
-		completion = CLIP<int>(100 * (_vm->_state->getFrameCount() - startFrame) / durationFrames, 0, 100);
+	while (_vm->_state->getTickCount() <= endTick || completion < 100) {
+		_frameLimiter->startFrame();
+
+		completion = CLIP<int>(100 * (_vm->_state->getTickCount() - startTick) / durationTicks, 0, 100);
 
 		drawStep(targetTexture, sourceTexture, completion);
 
 		_vm->_gfx->flipBuffer();
+		_frameLimiter->delayBeforeSwap();
 		g_system->updateScreen();
-		g_system->delayMillis(10);
 		_vm->_state->updateFrameCounters();
 	}
 

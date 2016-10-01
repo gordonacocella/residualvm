@@ -102,8 +102,8 @@ bool FloorFace::intersectRay(const Math::Ray &ray, Math::Vector3d &intersection)
 	// Point on ray: P = origin + r * direction
 	// Point on both => r = - dot(n, origin - _vertices[0]) / dot(n, direction)
 
-	float num = -Math::Vector3d::dotProduct(n, ray.origin() - _vertices[0]);
-	float denom = Math::Vector3d::dotProduct(n, ray.direction());
+	float num = -Math::Vector3d::dotProduct(n, ray.getOrigin() - _vertices[0]);
+	float denom = Math::Vector3d::dotProduct(n, ray.getDirection());
 
 	if (fabs(denom) < 0.00001) {
 		// The ray is parallel to the plane
@@ -117,7 +117,7 @@ bool FloorFace::intersectRay(const Math::Ray &ray, Math::Vector3d &intersection)
 	}
 
 	// Compute the intersection point between the triangle plane and the ray
-	intersection = ray.origin() + r * ray.direction();
+	intersection = ray.getOrigin() + r * ray.getDirection();
 
 	// Check the intersection point is inside the triangle
 	return isPointInside(intersection);
@@ -125,7 +125,7 @@ bool FloorFace::intersectRay(const Math::Ray &ray, Math::Vector3d &intersection)
 
 float FloorFace::distanceToRay(const Math::Ray &ray) const {
 	Math::Vector3d center = getCenter();
-	return Math::Vector3d::crossProduct(ray.direction(), center - ray.origin()).getMagnitude();
+	return Math::Vector3d::crossProduct(ray.getDirection(), center - ray.getOrigin()).getMagnitude();
 }
 
 float FloorFace::getDistanceFromCamera() const {
@@ -150,7 +150,12 @@ FloorEdge *FloorFace::findNearestEdge(const Math::Vector3d &point) const {
 	FloorEdge *edge = nullptr;
 
 	for (uint i = 0; i < _edges.size(); i++) {
+		if (!_edges[i]->isEnabled()) {
+			continue;
+		}
+
 		float distance = (point - _edges[i]->getPosition()).getSquareMagnitude();
+
 
 		if (!edge || distance < minDistance) {
 			minDistance = distance;
@@ -169,9 +174,9 @@ bool FloorFace::hasVertices() const {
 	return _indices[0] != 0 || _indices[1] != 0 || _indices[2] != 0;
 }
 
-void FloorFace::enable(bool enable) {
+void FloorFace::enable(bool e) {
 	for (uint i = 0; i < _edges.size(); i++) {
-		_edges[i]->enable(enable);
+		_edges[i]->enable(e);
 	}
 }
 

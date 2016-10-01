@@ -47,7 +47,7 @@ Renderer *CreateGfxTinyGL(OSystem *system) {
 }
 
 TinyGLRenderer::TinyGLRenderer(OSystem *system) :
-		BaseRenderer(system),
+		Renderer(system),
 		_fb(NULL) {
 }
 
@@ -99,7 +99,7 @@ void TinyGLRenderer::setupCameraOrtho2D(bool noScaling) {
 }
 
 void TinyGLRenderer::setupCameraPerspective(float pitch, float heading, float fov) {
-	BaseRenderer::setupCameraPerspective(pitch, heading, fov);
+	Renderer::setupCameraPerspective(pitch, heading, fov);
 
 	// NOTE: tinyGL viewport implementation needs to be checked as it doesn't behave the same as openGL
 	tglViewport(0, kTopBorderHeight, kOriginalWidth, kFrameHeight);
@@ -123,11 +123,12 @@ void TinyGLRenderer::drawRect2D(const Common::Rect &rect, uint32 color) {
 		tglBlendFunc(TGL_SRC_ALPHA, TGL_ONE_MINUS_SRC_ALPHA);
 	}
 
-	for (int x = rect.left; x < rect.right; x++) {
-		for (int y = rect.top; y < rect.bottom; y++) {
-			_fb->writePixel(y * kOriginalWidth + x, a, r, g, b);
-		}
-	}
+	tglBegin(TGL_TRIANGLE_STRIP);
+		tglVertex3f(rect.left, rect.bottom, 0.0f);
+		tglVertex3f(rect.right, rect.bottom, 0.0f);
+		tglVertex3f(rect.left, rect.top, 0.0f);
+		tglVertex3f(rect.right, rect.top, 0.0f);
+	tglEnd();
 
 	tglDisable(TGL_BLEND);
 }

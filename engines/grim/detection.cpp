@@ -30,6 +30,7 @@
 #include "common/config-manager.h"
 #include "common/system.h"
 #include "common/savefile.h"
+#include "common/translation.h"
 
 namespace Grim {
 
@@ -45,14 +46,26 @@ static const PlainGameDescriptor grimGames[] = {
 };
 
 #define GAMEOPTION_LOAD_DATAUSR GUIO_GAMEOPTIONS1
+#define GAMEOPTION_SHOW_FPS GUIO_GAMEOPTIONS2
+
+#define GUI_OPTIONS_GRIME GUIO2(GAMEOPTION_LOAD_DATAUSR, GAMEOPTION_SHOW_FPS)
 
 static const ADExtraGuiOptionsMap gameGuiOptions[] = {
 	{
 		GAMEOPTION_LOAD_DATAUSR,
 		{
-			"Load user patch (unsupported)",
-			"Load an user patch. Please note that the ResidualVM-team doesn't provide support for using such patches.",
+			_s("Load user patch (unsupported)"),
+			_s("Load an user patch. Please note that the ResidualVM-team doesn't provide support for using such patches."),
 			"datausr_load",
+			false
+		}
+	},
+	{
+		GAMEOPTION_SHOW_FPS,
+		{
+			_s("Show FPS"),
+			_s("Show the current FPS-rate, while you play."),
+			"show_fps",
 			false
 		}
 	},
@@ -70,7 +83,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -83,7 +96,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -96,7 +109,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::FR_FRA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -109,7 +122,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::PT_BRA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -122,7 +135,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::IT_ITA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -135,7 +148,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::ES_ESP,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -148,7 +161,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -161,7 +174,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -174,7 +187,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::ES_ESP,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -187,7 +200,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::ES_ESP,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -200,7 +213,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::IT_ITA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -213,7 +226,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::FR_FRA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -226,7 +239,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::PT_BRA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -239,7 +252,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -252,7 +265,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -268,7 +281,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::FR_FRA,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -285,7 +298,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -302,7 +315,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::IT_ITA,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -319,7 +332,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::ES_ESP,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_GRIM
 	},
@@ -333,7 +346,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -346,7 +359,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -359,7 +372,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::IT_ITA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -372,7 +385,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::ES_ESP,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -385,7 +398,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::FR_FRA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -398,7 +411,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::PT_BRA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -411,7 +424,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::RU_RUS,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -428,7 +441,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformMacintosh,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -441,7 +454,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformPS2,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -454,7 +467,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformPS2,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -467,7 +480,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::IT_ITA,
 			Common::kPlatformPS2,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -480,7 +493,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::ES_ESP,
 			Common::kPlatformPS2,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -493,7 +506,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::FR_FRA,
 			Common::kPlatformPS2,
 			ADGF_NO_FLAGS,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -510,7 +523,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -527,7 +540,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::FR_FRA,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -545,7 +558,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},
@@ -563,7 +576,7 @@ static const GrimGameDescription gameDescriptions[] = {
 			Common::ES_ESP,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GAMEOPTION_LOAD_DATAUSR)
+			GUI_OPTIONS_GRIME
 		},
 		GType_MONKEY4
 	},

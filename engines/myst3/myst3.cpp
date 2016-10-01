@@ -60,12 +60,13 @@
 namespace Myst3 {
 
 enum MystLanguage {
-	kEnglish,
-	kDutch,
-	kFrench,
-	kGerman,
-	kItalian,
-	kSpanish
+	kEnglish = 0,
+	kOther   = 1, // Dutch, Japanese or Polish
+	kDutch   = 1,
+	kFrench  = 2,
+	kGerman  = 3,
+	kItalian = 4,
+	kSpanish = 5
 };
 
 Myst3Engine::Myst3Engine(OSystem *syst, const Myst3GameDescription *version) :
@@ -76,9 +77,10 @@ Myst3Engine::Myst3Engine(OSystem *syst, const Myst3GameDescription *version) :
 		_rnd(0), _sound(0), _ambient(0),
 		_inputSpacePressed(false), _inputEnterPressed(false),
 		_inputEscapePressed(false), _inputTildePressed(false),
+		_inputEscapePressedNotConsumed(false),
 		_menuAction(0), _projectorBackground(0),
 		_shakeEffect(0), _rotationEffect(0), _backgroundSoundScriptLastRoomId(0),
-		_transition(0) {
+		_transition(0), _frameLimiter(0) {
 	DebugMan.addDebugChannel(kDebugVariable, "Variable", "Track Variable Accesses");
 	DebugMan.addDebugChannel(kDebugSaveLoad, "SaveLoad", "Track Save/Load Function");
 	DebugMan.addDebugChannel(kDebugScript, "Script", "Track Script Execution");
@@ -132,6 +134,7 @@ Myst3Engine::~Myst3Engine() {
 	delete _rnd;
 	delete _sound;
 	delete _ambient;
+	delete _frameLimiter;
 	delete _gfx;
 }
 
@@ -155,13 +158,14 @@ Common::Error Myst3Engine::run() {
 	}
 
 	_gfx = createRenderer(_system);
+	_frameLimiter = new FrameLimiter(_system, 60);
 	_sound = new Sound(this);
 	_ambient = new Ambient(this);
 	_rnd = new Common::RandomSource("sprint");
 	_console = new Console(this);
 	_scriptEngine = new Script(this);
-	_db = new Database(this);
 	_state = new GameState(this);
+	_db = new Database(this);
 	_scene = new Scene(this);
 	if (getPlatform() == Common::kPlatformXbox) {
 		_menu = new AlbumMenu(this);
@@ -246,7 +250,7 @@ void Myst3Engine::openArchives() {
 	Common::String menuLanguage;
 	Common::String textLanguage;
 
-	switch (getDefaultLanguage()) {
+	switch (getGameLanguage()) {
 	case Common::NL_NLD:
 		menuLanguage = "DUTCH";
 		break;
@@ -275,7 +279,7 @@ void Myst3Engine::openArchives() {
 		break;
 	}
 
-	if (getExecutableVersion()->flags & kFlagDVD) {
+	if (isDVDVersion()) {
 		switch (ConfMan.getInt("text_language")) {
 		case kDutch:
 			textLanguage = "DUTCH";
@@ -319,7 +323,7 @@ void Myst3Engine::openArchives() {
 
 	addArchive(textLanguage + ".m3t", true);
 
-	if ((getExecutableVersion()->flags & kFlagDVD) || !isMonolingual())
+	if (isDVDVersion() || !isMonolingual())
 		if (!addArchive("language.m3u", false))
 			addArchive(menuLanguage + ".m3u", true);
 
@@ -334,26 +338,18 @@ void Myst3Engine::closeArchives() {
 }
 
 bool Myst3Engine::checkDatafiles() {
-#ifndef USE_SAFEDISC
-	if (getExecutableVersion()->safeDiskKey) {
-		static const char *safediscMessage =
-				_("This version of Myst III is encrypted with a copy-protection\n"
-				"preventing ResidualVM from reading required data.\n"
-				"Please replace your 'M3.exe' file with the one from the official update\n"
-				"corresponding to your game's language and redetect the game.\n"
-				"These updates don't contain the copy-protection and can be downloaded from\n"
-				"http://www.residualvm.org/downloads/");
-		warning("%s", safediscMessage);
-		GUI::displayErrorDialog(safediscMessage);
+	if (!SearchMan.hasFile("OVER101.m3o")) {
+		static const char *updateMessage =
+				_("This version of Myst III has not been updated with the latest official patch.\n"
+						  "Please install the official update corresponding to your game's language.\n"
+						  "The updates can be downloaded from:\n"
+						  "http://www.residualvm.org/downloads/");
+		warning(updateMessage);
+		GUI::displayErrorDialog(updateMessage);
 		return false;
 	}
-#endif // USE_SAFEDISC
-	return true;
-}
 
-bool Myst3Engine::isMonolingual() const {
-	return getDefaultLanguage() == Common::EN_ANY
-			|| getDefaultLanguage() == Common::RU_RUS;
+	return true;
 }
 
 HotSpot *Myst3Engine::getHoveredHotspot(NodePtr nodeData, uint16 var) {
@@ -459,21 +455,14 @@ void Myst3Engine::processInput(bool lookOnly) {
 
 		} else if (event.type == Common::EVENT_KEYDOWN) {
 			// Save file name input
-			_menu->handleInput(event.kbd);
+			if (_menu->handleInput(event.kbd)) {
+				continue;
+			}
 
 			switch (event.kbd.keycode) {
 			case Common::KEYCODE_ESCAPE:
 				_inputEscapePressed = true;
-
-				// Open main menu
-				if (_state->hasVarMenuEscapePressed()) {
-					if (_cursor->isVisible()) {
-						if (_state->getLocationRoom() != 901)
-							_menu->goToNode(100);
-						else
-							_state->setMenuEscapePressed(1);
-					}
-				}
+				_inputEscapePressedNotConsumed = true;
 				break;
 			case Common::KEYCODE_RETURN:
 			case Common::KEYCODE_KP_ENTER:
@@ -483,12 +472,12 @@ void Myst3Engine::processInput(bool lookOnly) {
 			case Common::KEYCODE_SPACE:
 				_inputSpacePressed = true;
 				break;
-			case Common::KEYCODE_TILDE:
+			case Common::KEYCODE_BACKQUOTE: // tilde, used to trigger the easter eggs
 				_inputTildePressed = true;
 				break;
 			case Common::KEYCODE_F5:
 				// Open main menu
-				if (_cursor->isVisible()) {
+				if (_cursor->isVisible() && !lookOnly) {
 					if (_state->getLocationRoom() != 901)
 						_menu->goToNode(100);
 				}
@@ -508,6 +497,7 @@ void Myst3Engine::processInput(bool lookOnly) {
 			switch (event.kbd.keycode) {
 			case Common::KEYCODE_ESCAPE:
 				_inputEscapePressed = false;
+				_inputEscapePressedNotConsumed = false;
 				break;
 			case Common::KEYCODE_RETURN:
 			case Common::KEYCODE_KP_ENTER:
@@ -516,12 +506,28 @@ void Myst3Engine::processInput(bool lookOnly) {
 			case Common::KEYCODE_SPACE:
 				_inputSpacePressed = false;
 				break;
-			case Common::KEYCODE_TILDE:
+			case Common::KEYCODE_BACKQUOTE:
 				_inputTildePressed = false;
 				break;
 			default:
 				break;
 			}
+		}
+	}
+
+	// Open main menu
+	// This is not checked directly in the event handling code
+	// because menu open requests done while in lookOnly mode
+	// need to be honored after leaving the inner script loop,
+	// especially when the script loop was cancelled due to pressing
+	// escape.
+	if (_inputEscapePressedNotConsumed && !lookOnly) {
+		_inputEscapePressedNotConsumed = false;
+		if (_cursor->isVisible() && _state->hasVarMenuEscapePressed()) {
+			if (_state->getLocationRoom() != 901)
+				_menu->goToNode(100);
+			else
+				_state->setMenuEscapePressed(1);
 		}
 	}
 }
@@ -650,8 +656,6 @@ void Myst3Engine::drawFrame(bool noSwap) {
 		SunSpot flare = computeSunspotsIntensity(pitch, heading);
 		if (flare.intensity >= 0)
 			_scene->drawSunspotFlare(flare);
-
-		_scene->drawBlackBorders();
 	}
 
 	if (isInventoryVisible())
@@ -687,9 +691,10 @@ void Myst3Engine::drawFrame(bool noSwap) {
 	_gfx->flipBuffer();
 
 	if (!noSwap) {
+		_frameLimiter->delayBeforeSwap();
 		_system->updateScreen();
-		_system->delayMillis(10);
 		_state->updateFrameCounters();
+		_frameLimiter->startFrame();
 	}
 }
 
@@ -1243,6 +1248,23 @@ const DirectorySubEntry *Myst3Engine::getFileDescription(const Common::String &r
 	return desc;
 }
 
+DirectorySubEntryList Myst3Engine::listFilesMatching(const Common::String &room, uint32 index, uint16 face,
+                                                     DirectorySubEntry::ResourceType type) {
+	Common::String archiveRoom = room;
+	if (archiveRoom == "") {
+		archiveRoom = _db->getRoomName(_state->getLocationRoom());
+	}
+
+	for (uint i = 0; i < _archivesCommon.size(); i++) {
+		DirectorySubEntryList list = _archivesCommon[i]->listFilesMatching(archiveRoom, index, face, type);
+		if (!list.empty()) {
+			return list;
+		}
+	}
+
+	return _archiveNode->listFilesMatching(archiveRoom, index, face, type);
+}
+
 Graphics::Surface *Myst3Engine::loadTexture(uint16 id) {
 	const DirectorySubEntry *desc = getFileDescription("GLOB", id, 0, DirectorySubEntry::kRawData);
 
@@ -1403,7 +1425,7 @@ Common::Error Myst3Engine::loadGameState(Common::String fileName, TransitionType
 	return Common::kUnknownError;
 }
 
-void Myst3Engine::animateDirectionChange(float targetPitch, float targetHeading, uint16 scriptFrames) {
+void Myst3Engine::animateDirectionChange(float targetPitch, float targetHeading, uint16 scriptTicks) {
 	float startPitch = _state->getLookAtPitch();
 	float startHeading = _state->getLookAtHeading();
 
@@ -1423,38 +1445,38 @@ void Myst3Engine::animateDirectionChange(float targetPitch, float targetHeading,
 	}
 
 	// Compute animation duration in frames
-	float numFrames;
-	if (scriptFrames) {
-		numFrames = scriptFrames;
+	float numTicks;
+	if (scriptTicks) {
+		numTicks = scriptTicks;
 	} else {
-		numFrames = sqrt(pitchDistance * pitchDistance + headingDistance * headingDistance)
+		numTicks = sqrt(pitchDistance * pitchDistance + headingDistance * headingDistance)
 				* 30.0f / _state->getCameraMoveSpeed();
 
-		if (numFrames > 0.0f)
-			numFrames += 10.0f;
+		if (numTicks > 0.0f)
+			numTicks += 10.0f;
 	}
 
-	uint startFrame = _state->getFrameCount();
+	uint startTick = _state->getTickCount();
 
 	// Draw animation
-	if (numFrames != 0.0f) {
+	if (numTicks != 0.0f) {
 		while (1) {
-			uint elapsedFrames = _state->getFrameCount() - startFrame;
-			if (elapsedFrames >= numFrames)
+			uint elapsedTicks = _state->getTickCount() - startTick;
+			if (elapsedTicks >= numTicks)
 				break;
 
 			float step;
-			if (numFrames >= 15) {
+			if (numTicks >= 15) {
 				// Fast then slow movement
-				if (elapsedFrames > numFrames / 2.0f)
-					step = 1.0f - (numFrames - elapsedFrames) * (numFrames - elapsedFrames)
-								/ (numFrames / 2.0f * numFrames / 2.0f) / 2.0f;
+				if (elapsedTicks > numTicks / 2.0f)
+					step = 1.0f - (numTicks - elapsedTicks) * (numTicks - elapsedTicks)
+								/ (numTicks / 2.0f * numTicks / 2.0f) / 2.0f;
 				else
-					step = elapsedFrames * elapsedFrames / (numFrames / 2.0f * numFrames / 2.0f) / 2.0f;
+					step = elapsedTicks * elapsedTicks / (numTicks / 2.0f * numTicks / 2.0f) / 2.0f;
 
 			} else {
 				// Constant speed movement
-				step = elapsedFrames / numFrames;
+				step = elapsedTicks / numTicks;
 			}
 
 			float nextPitch = startPitch + pitchDistance * step;
@@ -1615,36 +1637,13 @@ SunSpot Myst3Engine::computeSunspotsIntensity(float pitch, float heading) {
 }
 
 void Myst3Engine::settingsInitDefaults() {
-	Common::Language executableLanguage = getDefaultLanguage();
-	int defaultLanguage;
-
-	switch (executableLanguage) {
-	case Common::NL_NLD:
-		defaultLanguage = kDutch;
-		break;
-	case Common::FR_FRA:
-		defaultLanguage = kFrench;
-		break;
-	case Common::DE_DEU:
-		defaultLanguage = kGerman;
-		break;
-	case Common::IT_ITA:
-		defaultLanguage = kItalian;
-		break;
-	case Common::ES_ESP:
-		defaultLanguage = kSpanish;
-		break;
-	case Common::EN_ANY:
-	default:
-		defaultLanguage = kEnglish;
-		break;
-	}
+	int defaultLanguage = getGameLanguageCode();
 
 	int defaultTextLanguage;
-	if (getExecutableVersion()->flags & kFlagDVD)
+	if (isDVDVersion())
 		defaultTextLanguage = defaultLanguage;
 	else
-		defaultTextLanguage = executableLanguage != Common::EN_ANY;
+		defaultTextLanguage = getGameLanguage() != Common::EN_ANY;
 
 	ConfMan.registerDefault("overall_volume", Audio::Mixer::kMaxMixerVolume);
 	ConfMan.registerDefault("music_volume", Audio::Mixer::kMaxMixerVolume / 2);
@@ -1657,6 +1656,23 @@ void Myst3Engine::settingsInitDefaults() {
 	ConfMan.registerDefault("zip_mode", false);
 	ConfMan.registerDefault("subtitles", false);
 	ConfMan.registerDefault("vibrations", true); // Xbox specific
+}
+
+int16 Myst3Engine::getGameLanguageCode() const {
+	switch (getGameLanguage()) {
+	case Common::FR_FRA:
+		return kFrench;
+	case Common::DE_DEU:
+		return kGerman;
+	case Common::IT_ITA:
+		return kItalian;
+	case Common::ES_ESP:
+		return kSpanish;
+	case Common::EN_ANY:
+		return kEnglish;
+	default:
+		return kOther;
+	}
 }
 
 void Myst3Engine::settingsLoadToVars() {
@@ -1716,6 +1732,16 @@ void Myst3Engine::syncSoundSettings() {
 
 	_mixer->setVolumeForSoundType(Audio::Mixer::kSFXSoundType, soundOverall);
 	_mixer->setVolumeForSoundType(Audio::Mixer::kMusicSoundType, soundVolumeMusic * soundOverall / 256);
+}
+
+void Myst3Engine::pauseEngineIntern(bool pause) {
+	Engine::pauseEngineIntern(pause);
+
+	for (uint i = 0; i < _movies.size(); i++) {
+		_movies[i]->pause(pause);
+	}
+
+	_state->pauseEngine(pause);
 }
 
 } // end of namespace Myst3

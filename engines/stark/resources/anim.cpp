@@ -295,6 +295,7 @@ void AnimVideo::onAllLoaded() {
 
 		_smacker = new VisualSmacker(StarkGfx);
 		_smacker->load(stream);
+		_smacker->overrideFrameRate(_frameRateOverride);
 		updateSmackerPosition();
 	}
 }
@@ -410,6 +411,7 @@ void AnimSkeleton::applyToItem(Item *item) {
 	TextureSet *texture = modelItem->findTextureSet(TextureSet::kTextureNormal);
 
 	_visual->setModel(mesh->getModel());
+	_visual->setAnimHandler(mesh->getAnimHandler());
 	_visual->setTexture(texture->getTexture());
 	_visual->setAnim(_seletonAnim);
 	_visual->setTime(_currentTime);
@@ -487,6 +489,12 @@ void AnimSkeleton::onGameLoop() {
 			_visual->setTime(_currentTime);
 		}
 	}
+}
+
+void AnimSkeleton::onExitLocation() {
+	Anim::onExitLocation();
+
+	_visual->resetBlending();
 }
 
 void AnimSkeleton::onPreDestroy() {

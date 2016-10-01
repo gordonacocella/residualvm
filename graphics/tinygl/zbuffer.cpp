@@ -36,8 +36,6 @@
 
 namespace TinyGL {
 
-uint8 PSZB;
-
 // adr must be aligned on an 'int'
 void memset_s(void *adr, int val, int count) {
 	int n, v;
@@ -88,7 +86,7 @@ FrameBuffer::FrameBuffer(int width, int height, const Graphics::PixelBuffer &fra
 	this->xsize = width;
 	this->ysize = height;
 	this->cmode = frame_buffer.getFormat();
-	PSZB = this->pixelbytes = this->cmode.bytesPerPixel;
+	this->pixelbytes = this->cmode.bytesPerPixel;
 	this->pixelbits = this->cmode.bytesPerPixel * 8;
 	this->linesize = (xsize * this->pixelbytes + 3) & ~3;
 
@@ -97,6 +95,7 @@ FrameBuffer::FrameBuffer(int width, int height, const Graphics::PixelBuffer &fra
 	size = this->xsize * this->ysize * sizeof(unsigned int);
 
 	this->_zbuf = (unsigned int *)gl_malloc(size);
+	memset(this->_zbuf, 0, size);
 
 	if (!frame_buffer) {
 		byte *pixelBuffer = (byte *)gl_malloc(this->ysize * this->linesize);
@@ -141,48 +140,156 @@ void FrameBuffer::delOffscreenBuffer(Buffer *buf) {
 
 void FrameBuffer::clear(int clearZ, int z, int clearColor, int r, int g, int b) {
 	if (clearZ) {
-		memset_l(this->_zbuf, z, this->xsize * this->ysize);
+		const uint8 *zc = (const uint8 *)&z;
+		unsigned int i;
+		for (i = 1; i < sizeof(z) && zc[0] == zc[i]; i++) { ; }
+		if (i == sizeof(z)) {
+			// All "z" bytes are identical, use memset (fast)
+			memset(this->_zbuf, zc[0], sizeof(*this->_zbuf) * this->xsize * this->ysize);
+		} else {
+			// Cannot use memset, use a variant working on integers (slow)
+			memset_l(this->_zbuf, z, this->xsize * this->ysize);
+		}
 	}
 	if (clearColor) {
 		byte *pp = this->pbuf.getRawBuffer();
 		uint32 color = this->cmode.RGBToColor(r, g, b);
-		for (int y = 0; y < this->ysize; y++) {
-			memset_s(pp, color, this->xsize);
-			pp = pp + this->linesize;
+		const uint8 *colorc = (uint8 *)&color;
+		unsigned int i;
+		for (i = 1; i < sizeof(color) && colorc[0] == colorc[i]; i++) { ; }
+		if (i == sizeof(color)) {
+			// All "color" bytes are identical, use memset (fast)
+			memset(pp, colorc[0], this->linesize * this->ysize);
+		} else {
+			// Cannot use memset, use a variant working on shorts/ints (slow)
+			switch(this->pixelbytes) {
+			case 2:
+				memset_s(pp, color, this->xsize * this->ysize);
+				break;
+			case 4:
+				memset_l(pp, color, this->xsize * this->ysize);
+				break;
+			default:
+				error("Unsupported pixel size %i", this->pixelbytes);
+			}
 		}
 	}
 }
 
 void FrameBuffer::clearRegion(int x, int y, int w, int h, int clearZ, int z, int clearColor, int r, int g, int b) {
 	if (clearZ) {
-		for (int row = y; row < y + h; row++) {
-			memset_l(this->_zbuf + x + (row * this->xsize), z, w);
+		int height = h;
+		unsigned int *zbuf = this->_zbuf + (y * this->xsize);
+		const uint8 *zc = (const uint8 *)&z;
+		unsigned int i;
+		for (i = 1; i < sizeof(z) && zc[0] == zc[i]; i++) { ; }
+		if (i == sizeof(z)) {
+			// All "z" bytes are identical, use memset (fast)
+			while (height--) {
+				memset(zbuf + x, zc[0], sizeof(*zbuf) * w);
+				zbuf += this->xsize;
+			}
+		} else {
+			// Cannot use memset, use a variant working on integers (slow)
+			while (height--) {
+				memset_l(zbuf + x, z, w);
+				zbuf += this->xsize;
+			}
 		}
 	}
 	if (clearColor) {
-		byte *pp = this->pbuf.getRawBuffer() + y * this->linesize;
+		int height = h;
+		byte *pp = this->pbuf.getRawBuffer() + y * this->linesize + x * this->pixelbytes;
 		uint32 color = this->cmode.RGBToColor(r, g, b);
-		for (int row = y; row < y + h; row++) {
-			memset_s(pp + x * this->pixelbytes, color, w);
-			pp = pp + this->linesize;
+		const uint8 *colorc = (uint8 *)&color;
+		unsigned int i;
+		for (i = 1; i < sizeof(color) && colorc[0] == colorc[i]; i++) { ; }
+		if (i == sizeof(color)) {
+			// All "color" bytes are identical, use memset (fast)
+			while (height--) {
+				memset(pp, colorc[0], this->pixelbytes * w);
+				pp += this->linesize;
+			}
+		} else {
+			// Cannot use memset, use a variant working on shorts/ints (slow)
+			while (height--) {
+				switch(this->pixelbytes) {
+				case 2:
+					memset_s(pp, color, w);
+					break;
+				case 4:
+					memset_l(pp, color, w);
+					break;
+				default:
+					error("Unsupported pixel size %i", this->pixelbytes);
+				}
+				pp += this->linesize;
+			}
 		}
 	}
 }
 
+inline static void blitPixel(uint8 offset, unsigned int *from_z, unsigned int *to_z, unsigned int z_length, byte *from_color, byte *to_color, unsigned int color_length) {
+	const unsigned int d = from_z[offset];
+	if (d > to_z[offset]) {
+		memcpy(to_color + offset, from_color + offset, color_length);
+		memcpy(to_z + offset, &d, z_length);
+	}
+}
 
 void FrameBuffer::blitOffscreenBuffer(Buffer *buf) {
 	// TODO: could be faster, probably.
+#define UNROLL_COUNT 16
 	if (buf->used) {
-		for (int i = 0; i < this->xsize * this->ysize; ++i) {
-			unsigned int d1 = buf->zbuf[i];
-			unsigned int d2 = this->_zbuf[i];
-			if (d1 > d2) {
-				const int offset = i * PSZB;
-				memcpy(this->pbuf.getRawBuffer() + offset, buf->pbuf + offset, PSZB);
-				memcpy(this->_zbuf + i, buf->zbuf + i, sizeof(int));
-			}
+		const int pixel_bytes = this->pixelbytes;
+		const int unrolled_pixel_bytes = pixel_bytes * UNROLL_COUNT;
+		byte *to = this->pbuf.getRawBuffer();
+		byte *from = buf->pbuf;
+		unsigned int *to_z = this->_zbuf;
+		unsigned int *from_z = buf->zbuf;
+		int count = this->xsize * this->ysize;
+		while (count >= UNROLL_COUNT) {
+			blitPixel(0x0, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x1, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x2, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x3, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x4, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x5, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x6, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x7, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x8, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0x9, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0xA, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0xB, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0xC, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0xD, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0xE, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			blitPixel(0xF, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+			count -= UNROLL_COUNT;
+			to += unrolled_pixel_bytes;
+			from += unrolled_pixel_bytes;
+			to_z += UNROLL_COUNT;
+		}
+		switch (count) {
+		case 0xF: blitPixel(0xE, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0xE: blitPixel(0xD, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0xD: blitPixel(0xC, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0xC: blitPixel(0xB, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0xB: blitPixel(0xA, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0xA: blitPixel(0x9, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x9: blitPixel(0x8, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x8: blitPixel(0x7, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x7: blitPixel(0x6, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x6: blitPixel(0x5, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x5: blitPixel(0x4, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x4: blitPixel(0x3, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x3: blitPixel(0x2, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x2: blitPixel(0x1, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x1: blitPixel(0x0, from_z, to_z, sizeof(int), from, to, pixel_bytes);
+		case 0x0: break;
 		}
 	}
+#undef UNROLL_COUNT
 }
 
 void FrameBuffer::selectOffscreenBuffer(Buffer *buf) {

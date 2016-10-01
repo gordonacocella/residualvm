@@ -84,7 +84,7 @@ public:
 	DECLARE_VAR(MenuSavedNode)
 
 	DECLARE_VAR(SecondsCountdown)
-	DECLARE_VAR(FrameCountdown)
+	DECLARE_VAR(TickCountdown)
 
 	DECLARE_VAR(SweepEnabled)
 	DECLARE_VAR(SweepValue)
@@ -122,7 +122,7 @@ public:
 	DECLARE_VAR(MagnetEffectUnk3)
 
 	DECLARE_VAR(ShakeEffectAmpl)
-	DECLARE_VAR(ShakeEffectFramePeriod)
+	DECLARE_VAR(ShakeEffectTickPeriod)
 	DECLARE_VAR(RotationEffectSpeed)
 	DECLARE_VAR(SunspotIntensity)
 	DECLARE_VAR(SunspotColor)
@@ -228,7 +228,7 @@ public:
 	DECLARE_VAR(TeslaMovieStart)
 
 	DECLARE_VAR(AmateriaSecondsCounter)
-	DECLARE_VAR(AmateriaFramesCounter)
+	DECLARE_VAR(AmateriaTicksCounter)
 
 	DECLARE_VAR(ResonanceRingsSolved)
 
@@ -306,7 +306,10 @@ public:
 	DECLARE_VAR(StateCanSave)
 
 	void updateFrameCounters();
-	uint getFrameCount() { return _data.currentFrame; }
+	uint getTickCount() const;
+
+	/** Ensture the counters are correct when the engine is paused or resumed */
+	void pauseEngine(bool pause);
 
 	ViewType getViewType() { return static_cast<ViewType>(_data.currentNodeType); }
 	void setViewType(ViewType t) { _data.currentNodeType = t; }
@@ -339,7 +342,7 @@ public:
 	struct StateData {
 		uint32 version;
 		uint32 gameRunning;
-		uint32 currentFrame;
+		uint32 tickCount;
 		uint32 nextSecondsUpdate;
 		uint32 secondsPlayed;
 		uint32 dword_4C2C44;
@@ -394,6 +397,9 @@ private:
 
 	StateData _data;
 
+	static const uint32 kTickDuration = 1000 / 30;
+	uint32 _lastTickStartTime;
+
 	struct VarDescription {
 		VarDescription() : var(0), name(0), unknown(0) {}
 		VarDescription(uint16 v, const char *n, bool u) : var(v), name(n), unknown(u) {}
@@ -417,6 +423,8 @@ private:
 	static void syncFloat(Common::Serializer &s, float &val,
 			Common::Serializer::Version minVersion = 0,
 			Common::Serializer::Version maxVersion = Common::Serializer::kLastVersion);
+
+	void updateTickCounters();
 };
 
 } // End of namespace Myst3
